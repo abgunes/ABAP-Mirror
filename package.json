@@ -107,6 +107,16 @@
         "command": "abapMirror.retrySyncErrors",
         "title": "ABAP Mirror - Retry Failed Syncs",
         "icon": "$(sync)"
+      },
+      {
+        "command": "abapMirror.retrySyncForItem",
+        "title": "ABAP Mirror - Retry Sync",
+        "icon": "$(sync)"
+      },
+      {
+        "command": "abapMirror.retrySyncForFolder",
+        "title": "ABAP Mirror - Retry Sync for Folder",
+        "icon": "$(sync)"
       }
     ],
     "menus": {
@@ -141,6 +151,18 @@
           "command": "abapMirror.retrySyncErrors",
           "when": "view == abapMirror.files",
           "group": "navigation"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "abapMirror.retrySyncForItem",
+          "when": "view == abapMirror.files && viewItem == abapMirrorObjectUnsynced",
+          "group": "inline"
+        },
+        {
+          "command": "abapMirror.retrySyncForFolder",
+          "when": "view == abapMirror.files && viewItem == abapMirrorFolderUnsynced",
+          "group": "inline"
         }
       ]
     },

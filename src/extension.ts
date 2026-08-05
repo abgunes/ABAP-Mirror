@@ -11,6 +11,7 @@ import {
 } from './folderMirror';
 import { createSyncStateStore } from './syncState';
 import { MirrorTreeDataProvider, MirrorDecorationProvider } from './mirrorTreeProvider';
+import { collectUnsyncedMirrorPaths, MirrorNode } from './mirrorTree';
 import { TypeIconResolver } from './typeIconResolver';
 import { detectAbapObjectType } from './abapObjectType';
 import { openTypeIconSettingsPanel } from './typeIconSettingsPanel';
@@ -334,6 +335,44 @@ async function retrySyncErrorsCommand(): Promise<void> {
   );
 }
 
+async function retrySyncForItemCommand(node: MirrorNode | undefined): Promise<void> {
+  if (!node || node.type !== 'object') return;
+  if (node.state === 'synced') {
+    vscode.window.showInformationMessage('ABAP Mirror: this object is already synced.');
+    return;
+  }
+  await pushMirrorChangeToAbap(node.fullPath);
+}
+
+async function retrySyncForFolderCommand(node: MirrorNode | undefined): Promise<void> {
+  if (!node || node.type !== 'folder') return;
+  const mirrorPaths = collectUnsyncedMirrorPaths(node);
+  if (mirrorPaths.length === 0) {
+    vscode.window.showInformationMessage('ABAP Mirror: everything under this folder is already synced.');
+    return;
+  }
+
+  let succeeded = 0;
+  await vscode.window.withProgress(
+    {
+      location: vscode.ProgressLocation.Notification,
+      title: `ABAP Mirror: retrying sync for ${mirrorPaths.length} object(s)`,
+      cancellable: false,
+    },
+    async progress => {
+      for (const [index, mirrorPath] of mirrorPaths.entries()) {
+        await pushMirrorChangeToAbap(mirrorPath);
+        if (syncStateStore.get(mirrorPath) !== 'error') succeeded++;
+        progress.report({ message: `${index + 1} / ${mirrorPaths.length}` });
+      }
+    }
+  );
+
+  vscode.window.showInformationMessage(
+    `ABAP Mirror: retried ${mirrorPaths.length} object(s) under this folder, ${succeeded} now synced.`
+  );
+}
+
 export function activate(context: vscode.ExtensionContext): void {
   if (!fs.existsSync(MIRROR_ROOT)) fs.mkdirSync(MIRROR_ROOT, { recursive: true });
 
@@ -360,6 +399,12 @@ export function activate(context: vscode.ExtensionContext): void {
   );
   context.subscriptions.push(
     vscode.commands.registerCommand('abapMirror.retrySyncErrors', retrySyncErrorsCommand)
+  );
+  context.subscriptions.push(
+    vscode.commands.registerCommand('abapMirror.retrySyncForItem', retrySyncForItemCommand)
+  );
+  context.subscriptions.push(
+    vscode.commands.registerCommand('abapMirror.retrySyncForFolder', retrySyncForFolderCommand)
   );
   context.subscriptions.push(outputChannel);
 

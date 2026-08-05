@@ -48,13 +48,13 @@ export class MirrorTreeDataProvider implements vscode.TreeDataProvider<MirrorNod
         : vscode.TreeItemCollapsibleState.Collapsed;
       const item = new vscode.TreeItem(node.name, collapsibleState);
       item.resourceUri = vscode.Uri.file(node.fullPath);
-      item.contextValue = 'abapMirrorFolder';
+      item.contextValue = folderContainsChanged(node) ? 'abapMirrorFolderUnsynced' : 'abapMirrorFolder';
       return item;
     }
 
     const item = new vscode.TreeItem(node.name, vscode.TreeItemCollapsibleState.None);
     item.resourceUri = vscode.Uri.file(node.fullPath);
-    item.contextValue = 'abapMirrorObject';
+    item.contextValue = node.state === 'synced' ? 'abapMirrorObject' : 'abapMirrorObjectUnsynced';
     item.command = {
       command: 'vscode.open',
       title: 'Open Mirror File',
