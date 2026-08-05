@@ -102,6 +102,11 @@
         "command": "abapMirror.configureTypeIcons",
         "title": "ABAP Mirror - Configure Type Icons",
         "icon": "$(gear)"
+      },
+      {
+        "command": "abapMirror.retrySyncErrors",
+        "title": "ABAP Mirror - Retry Failed Syncs",
+        "icon": "$(sync)"
       }
     ],
     "menus": {
@@ -129,6 +134,11 @@
       "view/title": [
         {
           "command": "abapMirror.configureTypeIcons",
+          "when": "view == abapMirror.files",
+          "group": "navigation"
+        },
+        {
+          "command": "abapMirror.retrySyncErrors",
           "when": "view == abapMirror.files",
           "group": "navigation"
         }

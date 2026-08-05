@@ -304,6 +304,36 @@ async function mirrorFolderCommand(uriArg: unknown): Promise<void> {
   );
 }
 
+async function retrySyncErrorsCommand(): Promise<void> {
+  const errored = syncStateStore.entries().filter(entry => entry.state === 'error');
+  if (errored.length === 0) {
+    vscode.window.showInformationMessage('ABAP Mirror: no failed syncs to retry.');
+    return;
+  }
+
+  const picks = errored.map(entry => ({
+    label: path.relative(MIRROR_ROOT, entry.mirrorPath),
+    mirrorPath: entry.mirrorPath,
+    picked: true,
+  }));
+
+  const selected = await vscode.window.showQuickPick(picks, {
+    canPickMany: true,
+    placeHolder: `Select which of ${errored.length} failed sync(s) to retry`,
+  });
+  if (!selected || selected.length === 0) return;
+
+  let succeeded = 0;
+  for (const pick of selected) {
+    await pushMirrorChangeToAbap(pick.mirrorPath);
+    if (syncStateStore.get(pick.mirrorPath) !== 'error') succeeded++;
+  }
+
+  vscode.window.showInformationMessage(
+    `ABAP Mirror: retried ${selected.length} sync(s), ${succeeded} succeeded.`
+  );
+}
+
 export function activate(context: vscode.ExtensionContext): void {
   if (!fs.existsSync(MIRROR_ROOT)) fs.mkdirSync(MIRROR_ROOT, { recursive: true });
 
@@ -327,6 +357,9 @@ export function activate(context: vscode.ExtensionContext): void {
   context.subscriptions.push(vscode.commands.registerCommand('abapMirror.folder', mirrorFolderCommand));
   context.subscriptions.push(
     vscode.commands.registerCommand('abapMirror.configureTypeIcons', openTypeIconSettingsPanel)
+  );
+  context.subscriptions.push(
+    vscode.commands.registerCommand('abapMirror.retrySyncErrors', retrySyncErrorsCommand)
   );
   context.subscriptions.push(outputChannel);
 
