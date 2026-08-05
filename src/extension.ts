@@ -11,6 +11,7 @@ import {
 } from './folderMirror';
 import { createSyncStateStore } from './syncState';
 import { MirrorTreeDataProvider, MirrorDecorationProvider } from './mirrorTreeProvider';
+import { TypeIconResolver } from './typeIconResolver';
 
 const MIRROR_ROOT = path.join(os.homedir(), '.abap-mirror');
 const mirrorToAbapUri = new Map<string, string>();
@@ -282,7 +283,12 @@ async function mirrorFolderCommand(uriArg: unknown): Promise<void> {
 export function activate(context: vscode.ExtensionContext): void {
   if (!fs.existsSync(MIRROR_ROOT)) fs.mkdirSync(MIRROR_ROOT, { recursive: true });
 
-  const mirrorTreeProvider = new MirrorTreeDataProvider(MIRROR_ROOT, syncStateStore);
+  const mirrorTreeProvider = new MirrorTreeDataProvider(
+    MIRROR_ROOT,
+    syncStateStore,
+    () => 'UNKNOWN', // Temporary: Task 6 replaces this with resolveObjectTypeForMirror.
+    new TypeIconResolver(path.join(os.tmpdir(), 'abap-mirror-type-icons-stopgap')) // Temporary: Task 6 replaces this with the real cache dir.
+  );
   context.subscriptions.push(vscode.window.registerTreeDataProvider('abapMirror.files', mirrorTreeProvider));
   context.subscriptions.push(mirrorTreeProvider);
 

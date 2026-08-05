@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { buildMirrorTree, folderContainsChanged, MirrorFolderNode, MirrorNode } from './mirrorTree';
 import type { SyncStateStore } from './syncState';
+import type { TypeIconResolver } from './typeIconResolver';
 
 export class MirrorTreeDataProvider implements vscode.TreeDataProvider<MirrorNode> {
   private readonly _onDidChangeTreeData = new vscode.EventEmitter<void>();
@@ -10,7 +11,9 @@ export class MirrorTreeDataProvider implements vscode.TreeDataProvider<MirrorNod
 
   constructor(
     private readonly mirrorRoot: string,
-    private readonly syncStateStore: SyncStateStore
+    private readonly syncStateStore: SyncStateStore,
+    private readonly resolveObjectType: (mirrorPath: string) => string,
+    private readonly iconResolver: TypeIconResolver
   ) {
     this._syncListener = syncStateStore.onDidChange(() => this.refresh());
     this.refresh();
@@ -19,8 +22,7 @@ export class MirrorTreeDataProvider implements vscode.TreeDataProvider<MirrorNod
   refresh(): void {
     const entries = this.syncStateStore.entries().map(entry => ({
       ...entry,
-      // Temporary: Task 5 replaces this with a real per-mirror object-type resolver.
-      objectType: 'UNKNOWN',
+      objectType: this.resolveObjectType(entry.mirrorPath),
     }));
     this._tree = buildMirrorTree(this.mirrorRoot, entries);
     this._onDidChangeTreeData.fire();
@@ -58,6 +60,13 @@ export class MirrorTreeDataProvider implements vscode.TreeDataProvider<MirrorNod
       title: 'Open Mirror File',
       arguments: [vscode.Uri.file(node.fullPath)],
     };
+    if (this.iconResolver.isEnabled()) {
+      // Anything other than 'synced' (currently 'changed', and 'error' once
+      // the sync-error-retry plan adds it) gets the red-box treatment: this
+      // object's mirror has not made it back into the ADT document buffer.
+      const iconUri = this.iconResolver.getIconUri(node.objectType, node.state !== 'synced');
+      if (iconUri) item.iconPath = iconUri;
+    }
     return item;
   }
 }
