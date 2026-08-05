@@ -11,9 +11,20 @@ import {
 } from './folderMirror';
 import { createSyncStateStore } from './syncState';
 import { MirrorTreeDataProvider, MirrorDecorationProvider } from './mirrorTreeProvider';
+import { collectUnsyncedMirrorPaths, MirrorNode } from './mirrorTree';
+import { TypeIconResolver } from './typeIconResolver';
+import { detectAbapObjectType } from './abapObjectType';
+import { openTypeIconSettingsPanel } from './typeIconSettingsPanel';
 
 const MIRROR_ROOT = path.join(os.homedir(), '.abap-mirror');
 const mirrorToAbapUri = new Map<string, string>();
+
+function resolveObjectTypeForMirror(mirrorPath: string): string {
+  const abapUriString = mirrorToAbapUri.get(mirrorPath);
+  if (!abapUriString) return 'UNKNOWN';
+  const segments = vscode.Uri.parse(abapUriString).path.split('/').filter(Boolean);
+  return detectAbapObjectType(segments);
+}
 // abap uris whose mirror the user closed on purpose: do not auto-reopen
 // until the abap tab itself is closed and reopened fresh.
 const manuallyClosedMirrors = new Set<string>();
@@ -85,14 +96,23 @@ async function pushMirrorChangeToAbap(mirrorPath: string): Promise<void> {
       abapDoc = await vscode.workspace.openTextDocument(vscode.Uri.parse(abapUriString));
       needsReveal = true;
     } catch (e) {
-      vscode.window.showWarningMessage(
-        `ABAP Mirror: could not reopen ${abapUriString} to sync change back (${(e as Error).message})`
-      );
+      const message = `ABAP Mirror: could not reopen ${abapUriString} to sync change back (${(e as Error).message})`;
+      outputChannel.appendLine(message);
+      syncStateStore.markError(mirrorPath);
+      offerRetry(mirrorPath, message);
       return;
     }
   }
 
-  const newContent = fs.readFileSync(mirrorPath, 'utf8');
+  let newContent: string;
+  try {
+    newContent = fs.readFileSync(mirrorPath, 'utf8');
+  } catch (e) {
+    const message = `ABAP Mirror: could not read mirror file ${mirrorPath} to sync its change back (${(e as Error).message})`;
+    outputChannel.appendLine(message);
+    syncStateStore.markError(mirrorPath);
+    return;
+  }
   if (abapDoc.getText() === newContent) return;
 
   // Only reveal/focus a freshly-reopened tab once we know an edit is
@@ -112,7 +132,21 @@ async function pushMirrorChangeToAbap(mirrorPath: string): Promise<void> {
   );
   const edit = new vscode.WorkspaceEdit();
   edit.replace(abapDoc.uri, fullRange, newContent);
-  await vscode.workspace.applyEdit(edit);
+  const applied = await vscode.workspace.applyEdit(edit);
+  if (!applied) {
+    const message = `ABAP Mirror: could not sync the change back into ${abapUriString} (the edit was rejected, possibly a concurrent change).`;
+    outputChannel.appendLine(message);
+    syncStateStore.markError(mirrorPath);
+    offerRetry(mirrorPath, message);
+  }
+}
+
+function offerRetry(mirrorPath: string, message: string): void {
+  vscode.window.showErrorMessage(message, 'Try Again').then(choice => {
+    if (choice === 'Try Again') {
+      pushMirrorChangeToAbap(mirrorPath);
+    }
+  });
 }
 
 async function closeMirrorEditor(mirrorPath: string): Promise<void> {
@@ -279,10 +313,85 @@ async function mirrorFolderCommand(uriArg: unknown): Promise<void> {
   );
 }
 
+async function retrySyncErrorsCommand(): Promise<void> {
+  const errored = syncStateStore.entries().filter(entry => entry.state === 'error');
+  if (errored.length === 0) {
+    vscode.window.showInformationMessage('ABAP Mirror: no failed syncs to retry.');
+    return;
+  }
+
+  const picks = errored.map(entry => ({
+    label: path.relative(MIRROR_ROOT, entry.mirrorPath),
+    mirrorPath: entry.mirrorPath,
+    picked: true,
+  }));
+
+  const selected = await vscode.window.showQuickPick(picks, {
+    canPickMany: true,
+    placeHolder: `Select which of ${errored.length} failed sync(s) to retry`,
+  });
+  if (!selected || selected.length === 0) return;
+
+  let succeeded = 0;
+  for (const pick of selected) {
+    await pushMirrorChangeToAbap(pick.mirrorPath);
+    if (syncStateStore.get(pick.mirrorPath) !== 'error') succeeded++;
+  }
+
+  vscode.window.showInformationMessage(
+    `ABAP Mirror: retried ${selected.length} sync(s), ${succeeded} succeeded.`
+  );
+}
+
+async function retrySyncForItemCommand(node: MirrorNode | undefined): Promise<void> {
+  if (!node || node.type !== 'object') return;
+  if (node.state === 'synced') {
+    vscode.window.showInformationMessage('ABAP Mirror: this object is already synced.');
+    return;
+  }
+  await pushMirrorChangeToAbap(node.fullPath);
+}
+
+async function retrySyncForFolderCommand(node: MirrorNode | undefined): Promise<void> {
+  if (!node || node.type !== 'folder') return;
+  const mirrorPaths = collectUnsyncedMirrorPaths(node);
+  if (mirrorPaths.length === 0) {
+    vscode.window.showInformationMessage('ABAP Mirror: everything under this folder is already synced.');
+    return;
+  }
+
+  let succeeded = 0;
+  await vscode.window.withProgress(
+    {
+      location: vscode.ProgressLocation.Notification,
+      title: `ABAP Mirror: retrying sync for ${mirrorPaths.length} object(s)`,
+      cancellable: false,
+    },
+    async progress => {
+      for (const [index, mirrorPath] of mirrorPaths.entries()) {
+        await pushMirrorChangeToAbap(mirrorPath);
+        if (syncStateStore.get(mirrorPath) !== 'error') succeeded++;
+        progress.report({ message: `${index + 1} / ${mirrorPaths.length}` });
+      }
+    }
+  );
+
+  vscode.window.showInformationMessage(
+    `ABAP Mirror: retried ${mirrorPaths.length} object(s) under this folder, ${succeeded} now synced.`
+  );
+}
+
 export function activate(context: vscode.ExtensionContext): void {
   if (!fs.existsSync(MIRROR_ROOT)) fs.mkdirSync(MIRROR_ROOT, { recursive: true });
 
-  const mirrorTreeProvider = new MirrorTreeDataProvider(MIRROR_ROOT, syncStateStore);
+  const typeIconCacheDir = path.join(context.globalStorageUri.fsPath, 'type-icons');
+  const typeIconResolver = new TypeIconResolver(typeIconCacheDir);
+  const mirrorTreeProvider = new MirrorTreeDataProvider(
+    MIRROR_ROOT,
+    syncStateStore,
+    resolveObjectTypeForMirror,
+    typeIconResolver
+  );
   context.subscriptions.push(vscode.window.registerTreeDataProvider('abapMirror.files', mirrorTreeProvider));
   context.subscriptions.push(mirrorTreeProvider);
 
@@ -293,7 +402,26 @@ export function activate(context: vscode.ExtensionContext): void {
   context.subscriptions.push(vscode.window.onDidChangeActiveTextEditor(handleActiveEditorChange));
   context.subscriptions.push(vscode.commands.registerCommand('abapMirror.open', openMirrorCommand));
   context.subscriptions.push(vscode.commands.registerCommand('abapMirror.folder', mirrorFolderCommand));
+  context.subscriptions.push(
+    vscode.commands.registerCommand('abapMirror.configureTypeIcons', openTypeIconSettingsPanel)
+  );
+  context.subscriptions.push(
+    vscode.commands.registerCommand('abapMirror.retrySyncErrors', retrySyncErrorsCommand)
+  );
+  context.subscriptions.push(
+    vscode.commands.registerCommand('abapMirror.retrySyncForItem', retrySyncForItemCommand)
+  );
+  context.subscriptions.push(
+    vscode.commands.registerCommand('abapMirror.retrySyncForFolder', retrySyncForFolderCommand)
+  );
   context.subscriptions.push(outputChannel);
+
+  context.subscriptions.push(vscode.workspace.onDidChangeConfiguration(e => {
+    if (e.affectsConfiguration('abapMirror.typeIcons') || e.affectsConfiguration('abapMirror.icons.enableInMirrorPanel')) {
+      typeIconResolver.clearCache();
+      mirrorTreeProvider.refresh();
+    }
+  }));
 
   context.subscriptions.push(vscode.workspace.onDidChangeTextDocument(e => {
     if (isEnabled() && e.document.uri.scheme === 'abap') {
@@ -321,11 +449,14 @@ export function activate(context: vscode.ExtensionContext): void {
     if (doc.uri.scheme === 'abap') {
       // Original ABAP tab closed: close its mirror too and forget any
       // manual-close/auto-revealed state, so reopening the object later
-      // reveals fresh. Bulk-tracked mirrors (from "Mirror Folder") keep
-      // their tracking entry so a later edit can still sync back.
+      // reveals fresh. Forgetting a single-object mirror also removes it
+      // from the ABAP Mirror Files panel, not just from push-back tracking.
+      // Bulk-tracked mirrors (from "Mirror Folder") keep their tracking
+      // entry so a later edit can still sync back.
       const mirrorPath = mirrorPathFor(doc.uri);
       if (!bulkTrackedMirrors.has(mirrorPath)) {
         mirrorToAbapUri.delete(mirrorPath);
+        syncStateStore.unregister(mirrorPath);
       }
       manuallyClosedMirrors.delete(doc.uri.toString());
       autoRevealedMirrors.delete(doc.uri.toString());

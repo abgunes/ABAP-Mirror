@@ -51,6 +51,7 @@ understands real files) can now work with the ABAP code you're actively looking 
 - **One-flag kill switch**: `abapMirror.enabled` turns the whole thing off instantly, no reload required.
 - **Mirror a whole folder at once**: right-click any ABAP package (or other folder) in ADT's Explorer tree and choose **ABAP Mirror - Mirror Folder (with Sub-Objects)** to mirror every object under it, recursively, without opening an editor tab per object. Folders with more than 200 objects ask for confirmation first.
 - **ABAP Mirror Files status view**: a new panel in the Explorer sidebar lists every mirrored object in the same hierarchy as ADT's own tree. An object shows red when its ADT document has unsaved changes pending, blue once it's saved. Folders containing an unsaved object expand automatically so you can spot it at a glance.
+- **Type icons**: objects in the ABAP Mirror Files panel show a colored icon for their ABAP type (for example green for classes/interfaces, blue for CDS-related objects, purple for behavior definitions/service bindings, yellow for tables and other DDIC objects, brown for programs/function groups). An object with unsaved changes pending in ADT gets a red box around its icon. Fully customizable via **ABAP Mirror - Configure Type Icons**.
 
 ## How it works
 
@@ -70,8 +71,10 @@ ADT as usual (`Ctrl+S`, or ADT's own Activate command).
 If a mirror file changes while its original ADT document isn't open, the extension reopens that document
 automatically (revealed beside your editor, not focused) and applies the change to its buffer, still without
 ever calling save. This is how mirrored objects from **Mirror Folder** stay in sync even though most of them are
-never opened by hand. If the original object can no longer be resolved at all (for example, it was deleted from
-the package), you will get a warning notification instead of the edit silently vanishing.
+never opened by hand. If a change can't be synced back at all (the original object can no longer be resolved, for
+example it was deleted from the package, or VS Code rejects the edit outright), you get an error notification with
+a **Try Again** button instead of the edit silently vanishing. The affected object also shows an orange "!" badge
+in the ABAP Mirror Files panel until the retry succeeds.
 
 ## Getting started
 
@@ -87,12 +90,17 @@ the package), you will get a warning notification instead of the edit silently v
 |---|---|
 | **ABAP Mirror - Open Mirror Object** | Opens (or refocuses) the mirror file for the active ABAP document. Available via right-click in the editor, on the editor tab, or the Command Palette. |
 | **ABAP Mirror - Mirror Folder (with Sub-Objects)** | Mirrors every object under the right-clicked ABAP package or folder, recursively, without opening editor tabs. Available via right-click on any `abap://` folder in the Explorer tree. |
+| **ABAP Mirror - Configure Type Icons** | Opens a settings panel to customize the abbreviation and color shown for each ABAP object type in the ABAP Mirror Files panel. Available from the Command Palette or the panel's title-bar gear icon. |
+| **ABAP Mirror - Retry Failed Syncs** | Lists every mirror that failed to sync back to ADT and lets you retry all of them, or a chosen few, in one go. Available from the Command Palette or the panel's title-bar sync icon. |
+| **ABAP Mirror - Retry Sync** | Retries syncing a single object back to ADT. Shows up as a hover icon and right-click entry in the ABAP Mirror Files panel, only on an object that isn't fully synced. |
+| **ABAP Mirror - Retry Sync for Folder** | Retries syncing every unsynced object under a folder back to ADT. Shows up as a hover icon and right-click entry in the ABAP Mirror Files panel, only on a folder containing something unsynced. |
 
 ## Settings
 
 | Setting | Default | Description |
 |---|---|---|
 | `abapMirror.enabled` | `true` | Turn mirroring on or off. Takes effect immediately, no reload needed. When off, no mirror files are created/updated and nothing is synced back into `abap://` documents; existing mirror files are left untouched. |
+| `abapMirror.icons.enableInMirrorPanel` | `true` | Show a colored icon for each object's ABAP type in the ABAP Mirror Files panel. Turn off to fall back to plain file icons. |
 
 ## Where mirror files live
 
@@ -111,8 +119,17 @@ the package), you will get a warning notification instead of the edit silently v
 - The mirror status view's red/blue coloring is provided through VS Code's file decoration API, which is
   per-file rather than per-view, so the same coloring may also show up on a mirrored file elsewhere in VS Code
   (for example, an open editor tab), not only inside the ABAP Mirror Files panel.
+- Type icons are best-effort: the object type is inferred from the shape of the ABAP object's `abap://` URI, which has not been exhaustively verified against every ADT object type. An unrecognized type falls back to a plain gray "?" icon rather than a wrong one.
+- If syncing a change back fails, retrying (via the error notification's **Try Again** button) re-sends the mirror's current on-disk content; it does not re-check whether the ADT document itself changed in the meantime.
 
 ## Release notes
+
+### Unreleased
+
+- **Type icons** in the ABAP Mirror Files panel: a colored icon per ABAP object type (class, CDS view, table, program, and more), fully customizable via the new **ABAP Mirror - Configure Type Icons** command.
+- Sync-back failures (a rejected edit, or an ADT document that can no longer be reopened) now show an error notification with a **Try Again** action and an orange "!" badge in the ABAP Mirror Files panel, instead of failing silently.
+- New **ABAP Mirror - Retry Failed Syncs** command: lists every mirror currently failing to sync back to ADT and lets you retry all of them, or a chosen few, at once.
+- Unsynced objects and folders in the ABAP Mirror Files panel now show a right-click (and hover-icon) **Retry Sync** action, for retrying just that one object or a whole folder's worth of unsynced objects.
 
 ### 0.1.0
 
