@@ -48,6 +48,44 @@
           "type": "boolean",
           "default": true,
           "description": "Mirror active abap:// ADT documents to real files (and sync edits back) so Claude Code can read/edit them. Toggle off to fully disable, no reload needed."
+        },
+        "abapMirror.icons.enableInMirrorPanel": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show a colored icon for each object's ABAP type (class, CDS view, table, ...) in the ABAP Mirror Files panel."
+        },
+        "abapMirror.typeIcons": {
+          "type": "array",
+          "description": "The abbreviation and color shown for each ABAP object type in the ABAP Mirror Files panel. Edit via the \"ABAP Mirror - Configure Type Icons\" command, or directly here.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "type": { "type": "string", "description": "ABAP object type code, e.g. CLAS, DDLS, TABL. UNKNOWN is the fallback for anything unrecognized." },
+              "abbreviation": { "type": "string", "description": "1-2 letter label shown on the icon." },
+              "color": { "type": "string", "description": "Hex color for the icon background, e.g. #2ea043." }
+            },
+            "required": ["type", "abbreviation", "color"]
+          },
+          "default": [
+            { "type": "CLAS", "abbreviation": "CL", "color": "#2ea043" },
+            { "type": "INTF", "abbreviation": "IN", "color": "#2ea043" },
+            { "type": "DDLS", "abbreviation": "D", "color": "#2f81f7" },
+            { "type": "DDLX", "abbreviation": "MX", "color": "#2f81f7" },
+            { "type": "DCLS", "abbreviation": "AC", "color": "#2f81f7" },
+            { "type": "SRVD", "abbreviation": "SD", "color": "#2f81f7" },
+            { "type": "BDEF", "abbreviation": "BD", "color": "#8957e5" },
+            { "type": "SRVB", "abbreviation": "SB", "color": "#8957e5" },
+            { "type": "TABL", "abbreviation": "TB", "color": "#c9a227" },
+            { "type": "STRU", "abbreviation": "ST", "color": "#c9a227" },
+            { "type": "TTYP", "abbreviation": "TT", "color": "#c9a227" },
+            { "type": "DTEL", "abbreviation": "DE", "color": "#c9a227" },
+            { "type": "DOMA", "abbreviation": "DO", "color": "#c9a227" },
+            { "type": "PROG", "abbreviation": "P", "color": "#a1682a" },
+            { "type": "FUGR", "abbreviation": "FG", "color": "#a1682a" },
+            { "type": "INCL", "abbreviation": "I", "color": "#a1682a" },
+            { "type": "FUNC", "abbreviation": "FM", "color": "#a1682a" },
+            { "type": "UNKNOWN", "abbreviation": "?", "color": "#6e7681" }
+          ]
         }
       }
     },

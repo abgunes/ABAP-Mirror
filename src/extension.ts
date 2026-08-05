@@ -12,9 +12,17 @@ import {
 import { createSyncStateStore } from './syncState';
 import { MirrorTreeDataProvider, MirrorDecorationProvider } from './mirrorTreeProvider';
 import { TypeIconResolver } from './typeIconResolver';
+import { detectAbapObjectType } from './abapObjectType';
 
 const MIRROR_ROOT = path.join(os.homedir(), '.abap-mirror');
 const mirrorToAbapUri = new Map<string, string>();
+
+function resolveObjectTypeForMirror(mirrorPath: string): string {
+  const abapUriString = mirrorToAbapUri.get(mirrorPath);
+  if (!abapUriString) return 'UNKNOWN';
+  const segments = vscode.Uri.parse(abapUriString).path.split('/').filter(Boolean);
+  return detectAbapObjectType(segments);
+}
 // abap uris whose mirror the user closed on purpose: do not auto-reopen
 // until the abap tab itself is closed and reopened fresh.
 const manuallyClosedMirrors = new Set<string>();
@@ -283,11 +291,13 @@ async function mirrorFolderCommand(uriArg: unknown): Promise<void> {
 export function activate(context: vscode.ExtensionContext): void {
   if (!fs.existsSync(MIRROR_ROOT)) fs.mkdirSync(MIRROR_ROOT, { recursive: true });
 
+  const typeIconCacheDir = path.join(context.globalStorageUri.fsPath, 'type-icons');
+  const typeIconResolver = new TypeIconResolver(typeIconCacheDir);
   const mirrorTreeProvider = new MirrorTreeDataProvider(
     MIRROR_ROOT,
     syncStateStore,
-    () => 'UNKNOWN', // Temporary: Task 6 replaces this with resolveObjectTypeForMirror.
-    new TypeIconResolver(path.join(os.tmpdir(), 'abap-mirror-type-icons-stopgap')) // Temporary: Task 6 replaces this with the real cache dir.
+    resolveObjectTypeForMirror,
+    typeIconResolver
   );
   context.subscriptions.push(vscode.window.registerTreeDataProvider('abapMirror.files', mirrorTreeProvider));
   context.subscriptions.push(mirrorTreeProvider);
@@ -300,6 +310,13 @@ export function activate(context: vscode.ExtensionContext): void {
   context.subscriptions.push(vscode.commands.registerCommand('abapMirror.open', openMirrorCommand));
   context.subscriptions.push(vscode.commands.registerCommand('abapMirror.folder', mirrorFolderCommand));
   context.subscriptions.push(outputChannel);
+
+  context.subscriptions.push(vscode.workspace.onDidChangeConfiguration(e => {
+    if (e.affectsConfiguration('abapMirror.typeIcons') || e.affectsConfiguration('abapMirror.icons.enableInMirrorPanel')) {
+      typeIconResolver.clearCache();
+      mirrorTreeProvider.refresh();
+    }
+  }));
 
   context.subscriptions.push(vscode.workspace.onDidChangeTextDocument(e => {
     if (isEnabled() && e.document.uri.scheme === 'abap') {
