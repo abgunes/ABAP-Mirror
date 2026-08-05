@@ -52,10 +52,21 @@ export function buildMirrorTree(
 export function folderContainsChanged(folderNode: MirrorFolderNode): boolean {
   for (const child of folderNode.children.values()) {
     if (child.type === 'object') {
-      if (child.state === 'changed') return true;
+      if (child.state !== 'synced') return true;
     } else if (folderContainsChanged(child)) {
       return true;
     }
   }
   return false;
+}
+
+export function collectUnsyncedMirrorPaths(node: MirrorNode): string[] {
+  if (node.type === 'object') {
+    return node.state !== 'synced' ? [node.fullPath] : [];
+  }
+  const paths: string[] = [];
+  for (const child of node.children.values()) {
+    paths.push(...collectUnsyncedMirrorPaths(child));
+  }
+  return paths;
 }
