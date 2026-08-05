@@ -86,6 +86,13 @@ export class MirrorDecorationProvider implements vscode.FileDecorationProvider {
 
   provideFileDecoration(uri: vscode.Uri): vscode.FileDecoration | undefined {
     const state = this.syncStateStore.get(uri.fsPath);
+    if (state === 'error') {
+      return {
+        badge: '!',
+        color: new vscode.ThemeColor('charts.orange'),
+        tooltip: 'Mirror file: failed to sync back to ADT. See the error notification to retry.',
+      };
+    }
     if (state === 'changed') {
       return { badge: 'M', color: new vscode.ThemeColor('charts.red'), tooltip: 'Mirror file: unsaved changes pending in ADT' };
     }

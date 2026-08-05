@@ -95,9 +95,10 @@ async function pushMirrorChangeToAbap(mirrorPath: string): Promise<void> {
       abapDoc = await vscode.workspace.openTextDocument(vscode.Uri.parse(abapUriString));
       needsReveal = true;
     } catch (e) {
-      vscode.window.showWarningMessage(
-        `ABAP Mirror: could not reopen ${abapUriString} to sync change back (${(e as Error).message})`
-      );
+      const message = `ABAP Mirror: could not reopen ${abapUriString} to sync change back (${(e as Error).message})`;
+      outputChannel.appendLine(message);
+      syncStateStore.markError(mirrorPath);
+      offerRetry(mirrorPath, message);
       return;
     }
   }
@@ -122,7 +123,21 @@ async function pushMirrorChangeToAbap(mirrorPath: string): Promise<void> {
   );
   const edit = new vscode.WorkspaceEdit();
   edit.replace(abapDoc.uri, fullRange, newContent);
-  await vscode.workspace.applyEdit(edit);
+  const applied = await vscode.workspace.applyEdit(edit);
+  if (!applied) {
+    const message = `ABAP Mirror: could not sync the change back into ${abapUriString} (the edit was rejected, possibly a concurrent change).`;
+    outputChannel.appendLine(message);
+    syncStateStore.markError(mirrorPath);
+    offerRetry(mirrorPath, message);
+  }
+}
+
+function offerRetry(mirrorPath: string, message: string): void {
+  vscode.window.showErrorMessage(message, 'Try Again').then(choice => {
+    if (choice === 'Try Again') {
+      pushMirrorChangeToAbap(mirrorPath);
+    }
+  });
 }
 
 async function closeMirrorEditor(mirrorPath: string): Promise<void> {
