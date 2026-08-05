@@ -348,11 +348,14 @@ export function activate(context: vscode.ExtensionContext): void {
     if (doc.uri.scheme === 'abap') {
       // Original ABAP tab closed: close its mirror too and forget any
       // manual-close/auto-revealed state, so reopening the object later
-      // reveals fresh. Bulk-tracked mirrors (from "Mirror Folder") keep
-      // their tracking entry so a later edit can still sync back.
+      // reveals fresh. Forgetting a single-object mirror also removes it
+      // from the ABAP Mirror Files panel, not just from push-back tracking.
+      // Bulk-tracked mirrors (from "Mirror Folder") keep their tracking
+      // entry so a later edit can still sync back.
       const mirrorPath = mirrorPathFor(doc.uri);
       if (!bulkTrackedMirrors.has(mirrorPath)) {
         mirrorToAbapUri.delete(mirrorPath);
+        syncStateStore.unregister(mirrorPath);
       }
       manuallyClosedMirrors.delete(doc.uri.toString());
       autoRevealedMirrors.delete(doc.uri.toString());

@@ -37,9 +37,10 @@ interface DetectionRule {
 // Rules are checked in order and the first full match wins, so more specific
 // rules (e.g. FUNC, which also has the FUGR keywords as ancestors) are
 // listed before their more general counterparts. If an object shows up as
-// the gray "?" fallback when it shouldn't, log the mismatched abap:// URI
-// (see resolveObjectTypeForMirror in extension.ts) and correct the rule
-// below to match what a real system actually returns.
+// the gray "?" fallback when it shouldn't, inspect the mismatched abap://
+// URI directly (e.g. via a debugger or a temporary log line in
+// resolveObjectTypeForMirror in extension.ts) and correct the rule below
+// to match what a real system actually returns.
 const RULES: DetectionRule[] = [
   { type: 'FUNC', keywords: ['functions', 'fmodules'] },
   { type: 'FUGR', keywords: ['functions', 'groups'] },

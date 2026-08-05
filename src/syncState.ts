@@ -6,6 +6,7 @@ export interface SyncStateStore {
   register(mirrorPath: string): void;
   markChanged(mirrorPath: string): void;
   markSynced(mirrorPath: string): void;
+  unregister(mirrorPath: string): void;
   get(mirrorPath: string): SyncState | undefined;
   entries(): Array<{ mirrorPath: string; state: SyncState }>;
   onDidChange(listener: () => void): { dispose(): void };
@@ -31,6 +32,11 @@ export function createSyncStateStore(): SyncStateStore {
     markSynced(mirrorPath) {
       if (state.get(mirrorPath) !== 'synced') {
         state.set(mirrorPath, 'synced');
+        emitter.emit('change');
+      }
+    },
+    unregister(mirrorPath) {
+      if (state.delete(mirrorPath)) {
         emitter.emit('change');
       }
     },
