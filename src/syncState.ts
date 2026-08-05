@@ -1,11 +1,12 @@
 import { EventEmitter } from 'node:events';
 
-export type SyncState = 'synced' | 'changed';
+export type SyncState = 'synced' | 'changed' | 'error';
 
 export interface SyncStateStore {
   register(mirrorPath: string): void;
   markChanged(mirrorPath: string): void;
   markSynced(mirrorPath: string): void;
+  markError(mirrorPath: string): void;
   unregister(mirrorPath: string): void;
   get(mirrorPath: string): SyncState | undefined;
   entries(): Array<{ mirrorPath: string; state: SyncState }>;
@@ -32,6 +33,12 @@ export function createSyncStateStore(): SyncStateStore {
     markSynced(mirrorPath) {
       if (state.get(mirrorPath) !== 'synced') {
         state.set(mirrorPath, 'synced');
+        emitter.emit('change');
+      }
+    },
+    markError(mirrorPath) {
+      if (state.get(mirrorPath) !== 'error') {
+        state.set(mirrorPath, 'error');
         emitter.emit('change');
       }
     },

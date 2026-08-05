@@ -25,6 +25,52 @@ test('markChanged then markSynced transitions correctly', () => {
   assert.equal(store.get('/mirror/a.abapmirror'), 'synced');
 });
 
+test('markError transitions a registered mirror to error', () => {
+  const store = createSyncStateStore();
+  store.register('/mirror/a.abapmirror');
+  store.markError('/mirror/a.abapmirror');
+  assert.equal(store.get('/mirror/a.abapmirror'), 'error');
+});
+
+test('a later markChanged clears an error state back to changed', () => {
+  const store = createSyncStateStore();
+  store.register('/mirror/a.abapmirror');
+  store.markError('/mirror/a.abapmirror');
+  store.markChanged('/mirror/a.abapmirror');
+  assert.equal(store.get('/mirror/a.abapmirror'), 'changed');
+});
+
+test('a later markSynced clears an error state back to synced', () => {
+  const store = createSyncStateStore();
+  store.register('/mirror/a.abapmirror');
+  store.markError('/mirror/a.abapmirror');
+  store.markSynced('/mirror/a.abapmirror');
+  assert.equal(store.get('/mirror/a.abapmirror'), 'synced');
+});
+
+test('onDidChange fires once when transitioning into error state', () => {
+  const store = createSyncStateStore();
+  store.register('/mirror/a.abapmirror');
+  let fireCount = 0;
+  store.onDidChange(() => {
+    fireCount++;
+  });
+  store.markError('/mirror/a.abapmirror');
+  assert.equal(fireCount, 1);
+});
+
+test('markError is a no-op if already in error state', () => {
+  const store = createSyncStateStore();
+  store.register('/mirror/a.abapmirror');
+  store.markError('/mirror/a.abapmirror');
+  let fireCount = 0;
+  store.onDidChange(() => {
+    fireCount++;
+  });
+  store.markError('/mirror/a.abapmirror');
+  assert.equal(fireCount, 0);
+});
+
 test('entries lists every tracked mirror path with its state', () => {
   const store = createSyncStateStore();
   store.register('/mirror/a.abapmirror');
