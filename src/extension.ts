@@ -13,6 +13,7 @@ import { createSyncStateStore } from './syncState';
 import { MirrorTreeDataProvider, MirrorDecorationProvider } from './mirrorTreeProvider';
 import { TypeIconResolver } from './typeIconResolver';
 import { detectAbapObjectType } from './abapObjectType';
+import { openTypeIconSettingsPanel } from './typeIconSettingsPanel';
 
 const MIRROR_ROOT = path.join(os.homedir(), '.abap-mirror');
 const mirrorToAbapUri = new Map<string, string>();
@@ -309,6 +310,9 @@ export function activate(context: vscode.ExtensionContext): void {
   context.subscriptions.push(vscode.window.onDidChangeActiveTextEditor(handleActiveEditorChange));
   context.subscriptions.push(vscode.commands.registerCommand('abapMirror.open', openMirrorCommand));
   context.subscriptions.push(vscode.commands.registerCommand('abapMirror.folder', mirrorFolderCommand));
+  context.subscriptions.push(
+    vscode.commands.registerCommand('abapMirror.configureTypeIcons', openTypeIconSettingsPanel)
+  );
   context.subscriptions.push(outputChannel);
 
   context.subscriptions.push(vscode.workspace.onDidChangeConfiguration(e => {

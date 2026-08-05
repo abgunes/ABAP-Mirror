@@ -97,6 +97,11 @@
       {
         "command": "abapMirror.folder",
         "title": "ABAP Mirror - Mirror Folder (with Sub-Objects)"
+      },
+      {
+        "command": "abapMirror.configureTypeIcons",
+        "title": "ABAP Mirror - Configure Type Icons",
+        "icon": "$(gear)"
       }
     ],
     "menus": {
@@ -119,6 +124,13 @@
           "command": "abapMirror.folder",
           "when": "resourceScheme == abap && explorerResourceIsFolder",
           "group": "z_abapMirror@1"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "abapMirror.configureTypeIcons",
+          "when": "view == abapMirror.files",
+          "group": "navigation"
         }
       ]
     },
