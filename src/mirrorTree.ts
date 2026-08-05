@@ -6,6 +6,7 @@ export interface MirrorObjectNode {
   name: string;
   fullPath: string;
   state: SyncState;
+  objectType: string;
 }
 
 export interface MirrorFolderNode {
@@ -19,11 +20,11 @@ export type MirrorNode = MirrorObjectNode | MirrorFolderNode;
 
 export function buildMirrorTree(
   rootPath: string,
-  entries: Array<{ mirrorPath: string; state: SyncState }>
+  entries: Array<{ mirrorPath: string; state: SyncState; objectType: string }>
 ): MirrorFolderNode {
   const root: MirrorFolderNode = { type: 'folder', name: path.basename(rootPath), fullPath: rootPath, children: new Map() };
 
-  for (const { mirrorPath, state } of entries) {
+  for (const { mirrorPath, state, objectType } of entries) {
     const rel = path.relative(rootPath, mirrorPath);
     const segments = rel.split(path.sep).filter(Boolean);
     let node: MirrorFolderNode = root;
@@ -34,7 +35,7 @@ export function buildMirrorTree(
       const isLeaf = i === segments.length - 1;
 
       if (isLeaf) {
-        node.children.set(segment, { type: 'object', name: segment, fullPath: currentPath, state });
+        node.children.set(segment, { type: 'object', name: segment, fullPath: currentPath, state, objectType });
         return;
       }
 

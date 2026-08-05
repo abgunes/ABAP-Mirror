@@ -17,7 +17,12 @@ export class MirrorTreeDataProvider implements vscode.TreeDataProvider<MirrorNod
   }
 
   refresh(): void {
-    this._tree = buildMirrorTree(this.mirrorRoot, this.syncStateStore.entries());
+    const entries = this.syncStateStore.entries().map(entry => ({
+      ...entry,
+      // Temporary: Task 5 replaces this with a real per-mirror object-type resolver.
+      objectType: 'UNKNOWN',
+    }));
+    this._tree = buildMirrorTree(this.mirrorRoot, entries);
     this._onDidChangeTreeData.fire();
   }
 
