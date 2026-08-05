@@ -104,7 +104,15 @@ async function pushMirrorChangeToAbap(mirrorPath: string): Promise<void> {
     }
   }
 
-  const newContent = fs.readFileSync(mirrorPath, 'utf8');
+  let newContent: string;
+  try {
+    newContent = fs.readFileSync(mirrorPath, 'utf8');
+  } catch (e) {
+    const message = `ABAP Mirror: could not read mirror file ${mirrorPath} to sync its change back (${(e as Error).message})`;
+    outputChannel.appendLine(message);
+    syncStateStore.markError(mirrorPath);
+    return;
+  }
   if (abapDoc.getText() === newContent) return;
 
   // Only reveal/focus a freshly-reopened tab once we know an edit is
