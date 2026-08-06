@@ -119,14 +119,17 @@ in the ABAP Mirror Files panel until the retry succeeds.
 - The mirror status view's red/blue coloring is provided through VS Code's file decoration API, which is
   per-file rather than per-view, so the same coloring may also show up on a mirrored file elsewhere in VS Code
   (for example, an open editor tab), not only inside the ABAP Mirror Files panel.
-- Type icons are best-effort: the object type is inferred from the shape of the ABAP object's `abap://` URI, which has not been exhaustively verified against every ADT object type. An unrecognized type falls back to a plain gray "?" icon rather than a wrong one.
+- Type icons are best-effort: the object type is inferred from the dotted suffix on the mirror's own filename (e.g. `.clas.abap`, `.ddls.acds`), which covers the common ADT object types but has not been exhaustively verified against every one that exists. An unrecognized type falls back to a plain gray "?" icon rather than a wrong one.
 - If syncing a change back fails, retrying (via the error notification's **Try Again** button) re-sends the mirror's current on-disk content; it does not re-check whether the ADT document itself changed in the meantime.
 
 ## Release notes
 
 ### 0.1.1
 
-- **Type icons** in the ABAP Mirror Files panel: a colored icon per ABAP object type (class, CDS view, table, program, and more), fully customizable via the new **ABAP Mirror - Configure Type Icons** command.
+- **Type icons** in the ABAP Mirror Files panel: a colored icon per ABAP object type (class, CDS view, table, program, and more), fully customizable via the new **ABAP Mirror - Configure Type Icons** command. An object with unsaved changes pending in ADT gets a red box around its icon.
+- The **Configure Type Icons** settings panel now has a modern, VS Code-themed look, a **Copy** button per row (for quickly cloning a type's color/abbreviation into a new row), and reliably saves your changes (a missing content-security-policy previously made every button in the panel silently do nothing).
+- Object type detection is more accurate: it now reads the real ABAP object type suffix embedded in the mirror's own filename, instead of guessing from surrounding folder names. This fixed several object types (CDS views among them) showing the wrong icon or no icon at all.
+- Fixed type icons intermittently disappearing after changing a color and scrolling the panel: the tree view now assigns each row a stable identity so VS Code reliably repaints it, and a settings save no longer wipes the entire icon cache (which could delete a still-valid icon file for an unrelated, unchanged object type).
 - Sync-back failures (a rejected edit, or an ADT document that can no longer be reopened) now show an error notification with a **Try Again** action and an orange "!" badge in the ABAP Mirror Files panel, instead of failing silently.
 - New **ABAP Mirror - Retry Failed Syncs** command: lists every mirror currently failing to sync back to ADT and lets you retry all of them, or a chosen few, at once.
 - Unsynced objects and folders in the ABAP Mirror Files panel now show a right-click (and hover-icon) **Retry Sync** action, for retrying just that one object or a whole folder's worth of unsynced objects.

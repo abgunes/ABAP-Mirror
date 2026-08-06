@@ -5,9 +5,22 @@ const os = require('node:os');
 const path = require('node:path');
 const { getOrCreateIconFile, clearIconCache } = require('../out/typeIconCache');
 
+// Track every temp cache dir we create so we can delete them when the suite
+// finishes. Without this cleanup each run left an orphan
+// abap-mirror-icon-cache-* dir in the OS temp folder (dozens accumulated over
+// repeated test runs during development).
+const createdCacheDirs = [];
 function freshCacheDir() {
-  return fs.mkdtempSync(path.join(os.tmpdir(), 'abap-mirror-icon-cache-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'abap-mirror-icon-cache-'));
+  createdCacheDirs.push(dir);
+  return dir;
 }
+
+test.after(() => {
+  for (const dir of createdCacheDirs) {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
 
 test('creates the cache directory and writes an SVG file on first call', () => {
   const cacheDir = freshCacheDir();

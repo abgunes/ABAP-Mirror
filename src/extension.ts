@@ -427,7 +427,16 @@ export function activate(context: vscode.ExtensionContext): void {
 
   context.subscriptions.push(vscode.workspace.onDidChangeConfiguration(e => {
     if (e.affectsConfiguration('abapMirror.typeIcons') || e.affectsConfiguration('abapMirror.icons.enableInMirrorPanel')) {
-      typeIconResolver.clearCache();
+      // Deliberately DO NOT wipe the icon cache here. The cache is
+      // content-addressed: getIconUri() computes each filename from the
+      // current (abbreviation, color, dirty) read fresh from config, so a
+      // changed color already resolves to a brand-new file and Uri, and the
+      // previous color's file simply becomes a harmless orphan. Wiping the
+      // whole directory on every save deleted still-valid files for types
+      // the user did NOT change (e.g. BDEF while editing DDLS), and that
+      // synchronous delete raced the renderer's asynchronous SVG load,
+      // leaving unchanged rows with no icon after a save. Refresh alone is
+      // enough to re-render with the updated colors.
       mirrorTreeProvider.refresh();
     }
   }));
