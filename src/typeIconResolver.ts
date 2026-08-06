@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { DEFAULT_TYPE_ICONS, TypeIconConfig } from './typeIconSvg';
 import { normalizeTypeIcons } from './normalizeTypeIcons';
-import { getOrCreateIconFile, clearIconCache } from './typeIconCache';
+import { getOrCreateIconFile } from './typeIconCache';
 
 export class TypeIconResolver {
   constructor(private readonly cacheDir: string) {}
@@ -21,9 +21,5 @@ export class TypeIconResolver {
     if (!match) return undefined;
     const filePath = getOrCreateIconFile(this.cacheDir, match.abbreviation, match.color, dirty);
     return vscode.Uri.file(filePath);
-  }
-
-  clearCache(): void {
-    clearIconCache(this.cacheDir);
   }
 }
