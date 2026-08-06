@@ -16,6 +16,7 @@ import { TypeIconResolver } from './typeIconResolver';
 import { detectAbapObjectType } from './abapObjectType';
 import { openTypeIconSettingsPanel } from './typeIconSettingsPanel';
 import { safeSegment } from './mirrorPath';
+import { createMirrorWriteScheduler } from './mirrorWriteScheduler';
 
 const MIRROR_ROOT = path.join(os.homedir(), '.abap-mirror');
 const mirrorToAbapUri = new Map<string, string>();
@@ -413,6 +414,11 @@ export function activate(context: vscode.ExtensionContext): void {
   context.subscriptions.push(vscode.window.registerFileDecorationProvider(mirrorDecorationProvider));
   context.subscriptions.push(mirrorDecorationProvider);
 
+  const mirrorWriteScheduler = createMirrorWriteScheduler(
+    (mirrorPath, content) => writeMirrorIfChanged(mirrorPath, content)
+  );
+  context.subscriptions.push({ dispose: () => mirrorWriteScheduler.dispose() });
+
   context.subscriptions.push(vscode.window.onDidChangeActiveTextEditor(handleActiveEditorChange));
   context.subscriptions.push(vscode.commands.registerCommand('abapMirror.open', openMirrorCommand));
   context.subscriptions.push(vscode.commands.registerCommand('abapMirror.folder', mirrorFolderCommand));
@@ -450,7 +456,7 @@ export function activate(context: vscode.ExtensionContext): void {
     if (isEnabled() && e.document.uri.scheme === 'abap') {
       const mirrorPath = mirrorPathFor(e.document.uri);
       mirrorToAbapUri.set(mirrorPath, e.document.uri.toString());
-      writeMirrorIfChanged(mirrorPath, e.document.getText());
+      mirrorWriteScheduler.schedule(mirrorPath, e.document.getText());
       if (e.document.isDirty) {
         syncStateStore.markChanged(mirrorPath);
       } else {
