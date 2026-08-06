@@ -47,12 +47,18 @@ export class MirrorTreeDataProvider implements vscode.TreeDataProvider<MirrorNod
         ? vscode.TreeItemCollapsibleState.Expanded
         : vscode.TreeItemCollapsibleState.Collapsed;
       const item = new vscode.TreeItem(node.name, collapsibleState);
+      // A stable, unique id per node so VS Code reliably re-renders changed
+      // properties (iconPath in particular) on rows that were already
+      // visible before a refresh, instead of only on rows that scroll out
+      // of the virtualized viewport and back in.
+      item.id = node.fullPath;
       item.resourceUri = vscode.Uri.file(node.fullPath);
       item.contextValue = folderContainsChanged(node) ? 'abapMirrorFolderUnsynced' : 'abapMirrorFolder';
       return item;
     }
 
     const item = new vscode.TreeItem(node.name, vscode.TreeItemCollapsibleState.None);
+    item.id = node.fullPath;
     item.resourceUri = vscode.Uri.file(node.fullPath);
     item.contextValue = node.state === 'synced' ? 'abapMirrorObject' : 'abapMirrorObjectUnsynced';
     item.command = {
