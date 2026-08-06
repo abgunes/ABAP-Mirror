@@ -18,55 +18,52 @@ export type AbapObjectTypeCode =
   | 'FUNC'
   | 'UNKNOWN';
 
-interface DetectionRule {
-  type: AbapObjectTypeCode;
-  // every keyword must appear as its own path segment for the rule to match
-  keywords: string[];
-}
-
-// Best-effort mapping from SAP ADT's REST resource path segments to ABAP
-// object type codes (cross-checked against SAP's official ADT object-type
-// list). ADT's abap:// URIs follow its REST API's resource paths (e.g.
-// /sap/bc/adt/oo/classes/{name}/...), which is a more reliable signal than
-// the mirror's on-disk leaf filename: sapse.adt-vscode collapses many
-// distinct DDIC/source object types under the same .abap/.ddic/.acds file
-// extensions, so the leaf name alone can't tell a class from a program, or
-// a table from a domain.
+// ADT's abap:// URIs render as a friendly package/repository-browser
+// hierarchy (package names, "Classes"/"Source Code Library"-style grouping
+// folders, then the object itself), not SAP's REST API resource paths. The
+// object's type instead lives as an abapGit-style dotted suffix on the
+// leaf segment itself, e.g. "zcl_foo.clas.abap", "zi_foo.ddls.acds",
+// "zi_foo.ddls.json". A class's mirror can have several leaves
+// (.clas.abap, .clas.definitions.abap, .clas.implementations.abap,
+// .clas.json) that all carry the same "clas" token, and a CDS view's two
+// leaves (.ddls.acds source, .ddls.json metadata) both carry "ddls".
 //
-// These keyword rules have NOT been verified against a live ADT connection.
-// Rules are checked in order and the first full match wins, so more specific
-// rules (e.g. FUNC, which also has the FUGR keywords as ancestors) are
-// listed before their more general counterparts. If an object shows up as
-// the gray "?" fallback when it shouldn't, inspect the mismatched abap://
-// URI directly (e.g. via a debugger or a temporary log line in
-// resolveObjectTypeForMirror in extension.ts) and correct the rule below
-// to match what a real system actually returns.
-const RULES: DetectionRule[] = [
-  { type: 'FUNC', keywords: ['functions', 'fmodules'] },
-  { type: 'FUGR', keywords: ['functions', 'groups'] },
-  { type: 'INCL', keywords: ['includes'] },
-  { type: 'PROG', keywords: ['programs'] },
-  { type: 'INTF', keywords: ['interfaces'] },
-  { type: 'CLAS', keywords: ['classes'] },
-  { type: 'BDEF', keywords: ['behaviordefinitions'] },
-  { type: 'SRVB', keywords: ['servicebindings'] },
-  { type: 'SRVD', keywords: ['servicedefinitions'] },
-  { type: 'DCLS', keywords: ['accesscontrols'] },
-  { type: 'DDLX', keywords: ['metadataextensions'] },
-  { type: 'DDLS', keywords: ['ddl', 'sources'] },
-  { type: 'TTYP', keywords: ['tabletypes'] },
-  { type: 'STRU', keywords: ['structures'] },
-  { type: 'TABL', keywords: ['tables'] },
-  { type: 'DTEL', keywords: ['dataelements'] },
-  { type: 'DOMA', keywords: ['domains'] },
-];
+// CLAS and DDLS are confirmed against a live ADT connection (see the mirror
+// leaf filenames this was built from: zagr_cl_disp_pln_brd.clas.abap,
+// zagr_i_disp_pln_brd_orders.ddls.acds/.ddls.json). The remaining entries
+// follow the same well-documented, stable abapGit suffix convention but
+// have not each been individually confirmed live. An unrecognized suffix
+// safely falls back to UNKNOWN rather than guessing.
+//
+// Structures share the same "tabl" suffix as database tables in this
+// convention (SAP's own object-type list files both under object type
+// TABL, distinguished only by a DTAB/STRU sub-kind that isn't visible in
+// the filename), so a bare ".tabl." leaf always resolves to TABL, never
+// STRU, by design.
+const SUFFIX_TYPE_MAP: Record<string, AbapObjectTypeCode> = {
+  clas: 'CLAS',
+  intf: 'INTF',
+  ddls: 'DDLS',
+  ddlx: 'DDLX',
+  dcls: 'DCLS',
+  srvd: 'SRVD',
+  bdef: 'BDEF',
+  srvb: 'SRVB',
+  tabl: 'TABL',
+  ttyp: 'TTYP',
+  dtel: 'DTEL',
+  doma: 'DOMA',
+  prog: 'PROG',
+  fugr: 'FUGR',
+  func: 'FUNC',
+};
 
 export function detectAbapObjectType(pathSegments: string[]): AbapObjectTypeCode {
-  const lower = pathSegments.map(segment => segment.toLowerCase());
-  for (const rule of RULES) {
-    if (rule.keywords.every(keyword => lower.includes(keyword))) {
-      return rule.type;
-    }
+  if (pathSegments.length === 0) return 'UNKNOWN';
+  const leaf = pathSegments[pathSegments.length - 1].toLowerCase();
+  for (const token of leaf.split('.')) {
+    const type = SUFFIX_TYPE_MAP[token];
+    if (type) return type;
   }
   return 'UNKNOWN';
 }

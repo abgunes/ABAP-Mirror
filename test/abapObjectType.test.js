@@ -3,84 +3,139 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { detectAbapObjectType } = require('../out/abapObjectType');
 
-test('detects a class from an oo/classes path', () => {
-  assert.equal(detectAbapObjectType(['sap', 'bc', 'adt', 'oo', 'classes', 'zcl_foo', 'source', 'main']), 'CLAS');
-});
+// These first two cases are the exact, real abap:// path segments observed
+// from a live ADT connection (reconstructed from the on-disk mirror folder
+// tree, which is a 1:1 rendering of the URI's path segments). They are the
+// evidence this detector is built against, not synthetic guesses.
 
-test('detects an interface from an oo/interfaces path', () => {
-  assert.equal(detectAbapObjectType(['sap', 'bc', 'adt', 'oo', 'interfaces', 'zif_foo', 'source', 'main']), 'INTF');
-});
-
-test('detects a function module even though its path also contains the function group segment', () => {
+test('detects a CDS view from its real dotted leaf suffix (.ddls.acds)', () => {
   assert.equal(
-    detectAbapObjectType(['sap', 'bc', 'adt', 'functions', 'groups', 'zfg', 'fmodules', 'z_fm', 'source', 'main']),
-    'FUNC'
+    detectAbapObjectType([
+      'It_Agri_S23_S4H_100_AGUNES_EN',
+      'System Library',
+      'ZIT_AGRO',
+      'ZIT_AGRO_DISPOSITION',
+      'ZIT_AGRO_DISPOSITION_PLN_BRD',
+      'ZAGR_I_DISP_PLN_BRD_ORDERS',
+      'zagr_i_disp_pln_brd_orders.ddls.acds',
+    ]),
+    'DDLS'
   );
 });
 
-test('detects a function group when there is no fmodules segment', () => {
-  assert.equal(detectAbapObjectType(['sap', 'bc', 'adt', 'functions', 'groups', 'zfg']), 'FUGR');
-});
-
-test('detects an include even though its path also contains the programs segment', () => {
+test('detects the same CDS view from its metadata leaf (.ddls.json)', () => {
   assert.equal(
-    detectAbapObjectType(['sap', 'bc', 'adt', 'programs', 'includes', 'zincl', 'source', 'main']),
-    'INCL'
+    detectAbapObjectType([
+      'It_Agri_S23_S4H_100_AGUNES_EN',
+      'System Library',
+      'ZIT_AGRO',
+      'ZIT_AGRO_DISPOSITION',
+      'ZIT_AGRO_DISPOSITION_PLN_BRD',
+      'ZAGR_I_DISP_PLN_BRD_ORDERS',
+      'zagr_i_disp_pln_brd_orders.ddls.json',
+    ]),
+    'DDLS'
   );
 });
 
-test('detects a program when there is no includes segment', () => {
-  assert.equal(detectAbapObjectType(['sap', 'bc', 'adt', 'programs', 'programs', 'zprog', 'source', 'main']), 'PROG');
+test('detects a class from its real dotted leaf suffix (.clas.abap), independent of any ancestor folder name', () => {
+  assert.equal(
+    detectAbapObjectType([
+      'It_Agri_S23_S4H_100_AGUNES_EN',
+      'System Library',
+      'ZIT_AGRO',
+      'ZIT_AGRO_DISPOSITION',
+      'ZIT_AGRO_DISPOSITION_PLN_BRD',
+      'Source Code Library',
+      'Classes',
+      'ZAGR_CL_DISP_PLN_BRD',
+      'zagr_cl_disp_pln_brd.clas.abap',
+    ]),
+    'CLAS'
+  );
 });
 
-test('detects a CDS data definition', () => {
-  assert.equal(detectAbapObjectType(['sap', 'bc', 'adt', 'ddic', 'ddl', 'sources', 'zi_foo', 'source', 'main']), 'DDLS');
+test('detects a class from its definitions/implementations/json companion leaves the same way', () => {
+  const base = [
+    'ZAGR_AGRO',
+    'Source Code Library',
+    'Classes',
+    'ZAGR_CL_DISP_PLN_BRD',
+  ];
+  assert.equal(detectAbapObjectType([...base, 'zagr_cl_disp_pln_brd.clas.definitions.abap']), 'CLAS');
+  assert.equal(detectAbapObjectType([...base, 'zagr_cl_disp_pln_brd.clas.implementations.abap']), 'CLAS');
+  assert.equal(detectAbapObjectType([...base, 'zagr_cl_disp_pln_brd.clas.json']), 'CLAS');
 });
 
-test('detects a CDS metadata extension', () => {
-  assert.equal(detectAbapObjectType(['sap', 'bc', 'adt', 'ddic', 'metadataextensions', 'zi_foo_x']), 'DDLX');
+test('detects an interface from its dotted leaf suffix (.intf.abap)', () => {
+  assert.equal(detectAbapObjectType(['ZAGR_AGRO', 'Interfaces', 'zif_disp.intf.abap']), 'INTF');
 });
 
-test('detects a CDS access control', () => {
-  assert.equal(detectAbapObjectType(['sap', 'bc', 'adt', 'acm', 'accesscontrols', 'zi_foo_dcl']), 'DCLS');
+test('detects a behavior definition from its dotted leaf suffix (.bdef.asbdef)', () => {
+  assert.equal(detectAbapObjectType(['ZAGR_AGRO', 'zagr_i_foo.bdef.asbdef']), 'BDEF');
 });
 
-test('detects a service definition', () => {
-  assert.equal(detectAbapObjectType(['sap', 'bc', 'adt', 'businessservices', 'servicedefinitions', 'zi_foo_sd']), 'SRVD');
+test('detects a service binding from its dotted leaf suffix', () => {
+  assert.equal(detectAbapObjectType(['ZAGR_AGRO', 'zagr_ui_foo.srvb.assrvb']), 'SRVB');
 });
 
-test('detects a behavior definition', () => {
-  assert.equal(detectAbapObjectType(['sap', 'bc', 'adt', 'bo', 'behaviordefinitions', 'zi_foo']), 'BDEF');
+test('detects a service definition from its dotted leaf suffix', () => {
+  assert.equal(detectAbapObjectType(['ZAGR_AGRO', 'zagr_i_foo_sd.srvd.assrvd']), 'SRVD');
 });
 
-test('detects a service binding', () => {
-  assert.equal(detectAbapObjectType(['sap', 'bc', 'adt', 'businessservices', 'servicebindings', 'zi_foo_sb']), 'SRVB');
+test('detects a CDS metadata extension from its dotted leaf suffix', () => {
+  assert.equal(detectAbapObjectType(['ZAGR_AGRO', 'zagr_i_foo.ddlx.asddlx']), 'DDLX');
 });
 
-test('detects a database table', () => {
-  assert.equal(detectAbapObjectType(['sap', 'bc', 'adt', 'ddic', 'tables', 'ztable']), 'TABL');
+test('detects a CDS access control from its dotted leaf suffix', () => {
+  assert.equal(detectAbapObjectType(['ZAGR_AGRO', 'zagr_i_foo.dcls.asdcls']), 'DCLS');
 });
 
-test('detects a structure', () => {
-  assert.equal(detectAbapObjectType(['sap', 'bc', 'adt', 'ddic', 'structures', 'zstruct']), 'STRU');
+test('detects a database table from its dotted leaf suffix', () => {
+  assert.equal(detectAbapObjectType(['ZAGR_AGRO', 'Dictionary', 'ztable.tabl.xml']), 'TABL');
 });
 
-test('detects a table type', () => {
-  assert.equal(detectAbapObjectType(['sap', 'bc', 'adt', 'ddic', 'tabletypes', 'zttyp']), 'TTYP');
+test('detects a table type from its dotted leaf suffix', () => {
+  assert.equal(detectAbapObjectType(['ZAGR_AGRO', 'Dictionary', 'zttyp.ttyp.xml']), 'TTYP');
 });
 
-test('detects a data element', () => {
-  assert.equal(detectAbapObjectType(['sap', 'bc', 'adt', 'ddic', 'dataelements', 'zdtel']), 'DTEL');
+test('detects a data element from its dotted leaf suffix', () => {
+  assert.equal(detectAbapObjectType(['ZAGR_AGRO', 'Dictionary', 'zdtel.dtel.xml']), 'DTEL');
 });
 
-test('detects a domain', () => {
-  assert.equal(detectAbapObjectType(['sap', 'bc', 'adt', 'ddic', 'domains', 'zdoma']), 'DOMA');
+test('detects a domain from its dotted leaf suffix', () => {
+  assert.equal(detectAbapObjectType(['ZAGR_AGRO', 'Dictionary', 'zdoma.doma.xml']), 'DOMA');
 });
 
-test('falls back to UNKNOWN for an unrecognized path', () => {
-  assert.equal(detectAbapObjectType(['sap', 'bc', 'adt', 'wdy', 'applications', 'zwda']), 'UNKNOWN');
+test('detects a program from its dotted leaf suffix', () => {
+  assert.equal(detectAbapObjectType(['ZAGR_AGRO', 'Source Code Library', 'Programs', 'zprog.prog.abap']), 'PROG');
 });
 
-test('matching is case-insensitive on path segments', () => {
-  assert.equal(detectAbapObjectType(['SAP', 'BC', 'ADT', 'OO', 'CLASSES', 'ZCL_FOO']), 'CLAS');
+test('detects a function group from its dotted leaf suffix', () => {
+  assert.equal(detectAbapObjectType(['ZAGR_AGRO', 'Source Code Library', 'Function Groups', 'zfg.fugr.xml']), 'FUGR');
+});
+
+test('detects a function module from its dotted leaf suffix', () => {
+  assert.equal(detectAbapObjectType(['ZAGR_AGRO', 'zfg.fugr', 'z_fm.func.abap']), 'FUNC');
+});
+
+test('falls back to UNKNOWN for a leaf with no recognized type token', () => {
+  assert.equal(detectAbapObjectType(['ZAGR_AGRO', 'Web Dynpro', 'zwda.wdya.xml']), 'UNKNOWN');
+});
+
+test('falls back to UNKNOWN for a leaf with no dot at all', () => {
+  assert.equal(detectAbapObjectType(['ZAGR_AGRO', 'zsomefolder']), 'UNKNOWN');
+});
+
+test('falls back to UNKNOWN for an empty path', () => {
+  assert.equal(detectAbapObjectType([]), 'UNKNOWN');
+});
+
+test('matching is case-insensitive on the leaf suffix', () => {
+  assert.equal(detectAbapObjectType(['ZAGR_AGRO', 'ZCL_FOO.CLAS.ABAP']), 'CLAS');
+});
+
+test('an object name that happens to contain a substring like "class" does not false-match without a dot boundary', () => {
+  // "subclass" contains the letters "clas" but is not the dotted token "clas" itself.
+  assert.equal(detectAbapObjectType(['ZAGR_AGRO', 'zsubclass_helper.prog.abap']), 'PROG');
 });
