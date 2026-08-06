@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { getOrCreateIconFile, clearIconCache } = require('../out/typeIconCache');
+const { getOrCreateIconFile } = require('../out/typeIconCache');
 
 // Track every temp cache dir we create so we can delete them when the suite
 // finishes. Without this cleanup each run left an orphan
@@ -56,11 +56,4 @@ test('the dirty variant gets its own cache file distinct from the clean one', ()
   assert.match(dirtyContent, /stroke="#f14c4c"/);
   const cleanContent = fs.readFileSync(clean, 'utf8');
   assert.doesNotMatch(cleanContent, /stroke="#f14c4c"/);
-});
-
-test('clearIconCache removes every cached icon file', () => {
-  const cacheDir = freshCacheDir();
-  getOrCreateIconFile(cacheDir, 'CL', '#2ea043');
-  clearIconCache(cacheDir);
-  assert.equal(fs.existsSync(cacheDir), false);
 });

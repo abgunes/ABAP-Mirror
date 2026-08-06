@@ -21,9 +21,3 @@ export function getOrCreateIconFile(
   }
   return filePath;
 }
-
-export function clearIconCache(cacheDir: string): void {
-  if (fs.existsSync(cacheDir)) {
-    fs.rmSync(cacheDir, { recursive: true, force: true });
-  }
-}
