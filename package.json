@@ -2,7 +2,7 @@
   "name": "abap-mirror",
   "displayName": "ABAP Mirror",
   "description": "Mirrors SAP ADT (abap://) documents to real files so AI coding assistants like Claude Code can read and edit them, with every change staying under your review.",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "publisher": "abgunes",
   "license": "MIT",
   "scripts": {

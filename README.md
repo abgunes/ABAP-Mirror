@@ -124,7 +124,7 @@ in the ABAP Mirror Files panel until the retry succeeds.
 
 ## Release notes
 
-### Unreleased
+### 0.1.1
 
 - **Type icons** in the ABAP Mirror Files panel: a colored icon per ABAP object type (class, CDS view, table, program, and more), fully customizable via the new **ABAP Mirror - Configure Type Icons** command.
 - Sync-back failures (a rejected edit, or an ADT document that can no longer be reopened) now show an error notification with a **Try Again** action and an orange "!" badge in the ABAP Mirror Files panel, instead of failing silently.
