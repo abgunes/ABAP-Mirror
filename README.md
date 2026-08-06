@@ -106,6 +106,14 @@ in the ABAP Mirror Files panel until the retry succeeds.
 
 `~/.abap-mirror/`: one file per ABAP object, nested in folders that match its repository path (so paths stay unique), with a short, readable leaf filename, e.g. `zdemo.prog.abap.abapmirror`. Mirror editor tabs carry an M badge (colored by sync state) so they are never confused with the real ADT tab. Safe to delete at any time: it's regenerated the next time you open the corresponding object.
 
+## Data and privacy
+
+Mirror files live under `~/.abap-mirror/`, in your home directory and outside any workspace. That is deliberate, it is what lets filesystem-based assistants read them, but it means your proprietary ABAP source is written to plain files that home-directory backups, cloud sync (OneDrive, iCloud, Dropbox), and desktop search or indexing services can pick up. Treat that directory as you would any local copy of SAP source:
+
+- Keep it inside your normal secured user profile, and exclude it from backup or sync tools if your organization requires it.
+- Do not commit or upload mirrored source without review; the `.abapmirror` files are a live copy of what you opened in ADT.
+- The whole directory is safe to delete at any time; each object's mirror is regenerated the next time you open it.
+
 ## Known limitations
 
 - Only `abap://` documents are mirrored.
