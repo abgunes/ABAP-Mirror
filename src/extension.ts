@@ -21,9 +21,18 @@ const mirrorToAbapUri = new Map<string, string>();
 
 function resolveObjectTypeForMirror(mirrorPath: string): string {
   const abapUriString = mirrorToAbapUri.get(mirrorPath);
-  if (!abapUriString) return 'UNKNOWN';
+  if (!abapUriString) {
+    outputChannel.appendLine(`Type icon: no tracked abap:// URI for ${mirrorPath}, showing UNKNOWN`);
+    return 'UNKNOWN';
+  }
   const segments = vscode.Uri.parse(abapUriString).path.split('/').filter(Boolean);
-  return detectAbapObjectType(segments);
+  const type = detectAbapObjectType(segments);
+  if (type === 'UNKNOWN') {
+    outputChannel.appendLine(
+      `Type icon: could not detect a type for ${mirrorPath} (abap uri: ${abapUriString}, segments: ${JSON.stringify(segments)})`
+    );
+  }
+  return type;
 }
 // abap uris whose mirror the user closed on purpose: do not auto-reopen
 // until the abap tab itself is closed and reopened fresh.
