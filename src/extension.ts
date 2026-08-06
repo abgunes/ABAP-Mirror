@@ -15,6 +15,7 @@ import { collectUnsyncedMirrorPaths, MirrorNode } from './mirrorTree';
 import { TypeIconResolver } from './typeIconResolver';
 import { detectAbapObjectType } from './abapObjectType';
 import { openTypeIconSettingsPanel } from './typeIconSettingsPanel';
+import { safeSegment } from './mirrorPath';
 
 const MIRROR_ROOT = path.join(os.homedir(), '.abap-mirror');
 const mirrorToAbapUri = new Map<string, string>();
@@ -54,12 +55,8 @@ function isEnabled(): boolean {
   return vscode.workspace.getConfiguration('abapMirror').get('enabled', true);
 }
 
-function sanitizeSegment(segment: string): string {
-  return segment.replace(/[<>:"|?*]/g, '_');
-}
-
 function mirrorPathFor(uri: vscode.Uri): string {
-  const segments = uri.path.split('/').filter(Boolean).map(sanitizeSegment);
+  const segments = uri.path.split('/').filter(Boolean).map(safeSegment);
   const leaf = segments.pop() || 'unnamed';
   // Nest mirrors under a folder tree matching the ABAP repository path, so
   // the leaf filename can stay short and readable (shown as the tab title)
@@ -76,7 +73,15 @@ function mirrorPathFor(uri: vscode.Uri): string {
   // casing/normalization. Otherwise this string won't equal the fsPath VS
   // Code reports back from tabs, visibleTextEditors, or the file watcher,
   // and every comparison against it silently fails on Windows.
-  return vscode.Uri.file(rawPath).fsPath;
+  const resolved = vscode.Uri.file(rawPath).fsPath;
+  // Defense in depth: safeSegment already neutralizes "." / ".." so no segment
+  // can climb out, but assert containment so any future regression fails loudly
+  // instead of writing outside the mirror root.
+  const rootWithSep = vscode.Uri.file(MIRROR_ROOT).fsPath + path.sep;
+  if (!(resolved + path.sep).startsWith(rootWithSep)) {
+    throw new Error(`ABAP Mirror: refusing to map ${uri.toString()} outside the mirror root`);
+  }
+  return resolved;
 }
 
 function writeMirrorIfChanged(mirrorPath: string, content: string): void {
