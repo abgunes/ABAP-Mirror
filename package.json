@@ -56,13 +56,14 @@
         },
         "abapMirror.typeIcons": {
           "type": "array",
+          "maxItems": 100,
           "description": "The abbreviation and color shown for each ABAP object type in the ABAP Mirror Files panel. Edit via the \"ABAP Mirror - Configure Type Icons\" command, or directly here.",
           "items": {
             "type": "object",
             "properties": {
-              "type": { "type": "string", "description": "ABAP object type code, e.g. CLAS, DDLS, TABL. UNKNOWN is the fallback for anything unrecognized." },
-              "abbreviation": { "type": "string", "description": "1-2 letter label shown on the icon." },
-              "color": { "type": "string", "description": "Hex color for the icon background, e.g. #2ea043." }
+              "type": { "type": "string", "pattern": "^[A-Za-z0-9_]{1,20}$", "description": "ABAP object type code, e.g. CLAS, DDLS, TABL. UNKNOWN is the fallback for anything unrecognized." },
+              "abbreviation": { "type": "string", "maxLength": 2, "pattern": "^[A-Za-z0-9]{1,2}$", "description": "1-2 letter label shown on the icon." },
+              "color": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$", "description": "Hex color for the icon background, e.g. #2ea043." }
             },
             "required": ["type", "abbreviation", "color"]
           },

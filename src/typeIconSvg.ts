@@ -32,12 +32,16 @@ export const DEFAULT_TYPE_ICONS: TypeIconConfig[] = [
   { type: 'UNKNOWN', abbreviation: '?', color: '#6e7681' },
 ];
 
+function escapeXmlText(value: string): string {
+  return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
 export function renderTypeIconSvg(
   abbreviation: string,
   colorHex: string,
   options: { dirty?: boolean } = {}
 ): string {
-  const label = abbreviation.slice(0, 2).toUpperCase();
+  const label = escapeXmlText(abbreviation.slice(0, 2).toUpperCase());
 
   if (!options.dirty) {
     const fontSize = label.length > 1 ? 7 : 9;

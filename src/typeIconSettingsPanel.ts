@@ -1,6 +1,7 @@
 // src/typeIconSettingsPanel.ts
 import * as vscode from 'vscode';
 import { DEFAULT_TYPE_ICONS, TypeIconConfig } from './typeIconSvg';
+import { normalizeTypeIcons } from './normalizeTypeIcons';
 
 export function openTypeIconSettingsPanel(): void {
   const panel = vscode.window.createWebviewPanel(
@@ -10,16 +11,25 @@ export function openTypeIconSettingsPanel(): void {
     { enableScripts: true }
   );
 
-  const current = vscode.workspace.getConfiguration('abapMirror').get<TypeIconConfig[]>('typeIcons', DEFAULT_TYPE_ICONS);
+  const rawCurrent = vscode.workspace.getConfiguration('abapMirror').get<TypeIconConfig[]>('typeIcons', DEFAULT_TYPE_ICONS);
+  const current = normalizeTypeIcons(rawCurrent);
   panel.webview.html = renderHtml(panel.webview, current);
 
   panel.webview.onDidReceiveMessage(async message => {
     if (message.command === 'save') {
-      const rows = message.rows as TypeIconConfig[];
+      const submitted = Array.isArray(message.rows) ? message.rows.length : 0;
+      const normalized = normalizeTypeIcons(message.rows);
       await vscode.workspace
         .getConfiguration('abapMirror')
-        .update('typeIcons', rows, vscode.ConfigurationTarget.Global);
-      vscode.window.showInformationMessage('ABAP Mirror: type icon settings saved.');
+        .update('typeIcons', normalized, vscode.ConfigurationTarget.Global);
+      const dropped = submitted - normalized.length;
+      if (dropped > 0) {
+        vscode.window.showWarningMessage(
+          `ABAP Mirror: saved ${normalized.length} type icon(s); ${dropped} row(s) were ignored for an invalid type code, abbreviation, or color.`
+        );
+      } else {
+        vscode.window.showInformationMessage('ABAP Mirror: type icon settings saved.');
+      }
     }
   });
 }

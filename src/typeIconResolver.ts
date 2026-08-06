@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { DEFAULT_TYPE_ICONS, TypeIconConfig } from './typeIconSvg';
+import { normalizeTypeIcons } from './normalizeTypeIcons';
 import { getOrCreateIconFile, clearIconCache } from './typeIconCache';
 
 export class TypeIconResolver {
@@ -10,7 +11,8 @@ export class TypeIconResolver {
   }
 
   private getConfiguredIcons(): TypeIconConfig[] {
-    return vscode.workspace.getConfiguration('abapMirror').get('typeIcons', DEFAULT_TYPE_ICONS);
+    const raw = vscode.workspace.getConfiguration('abapMirror').get('typeIcons', DEFAULT_TYPE_ICONS);
+    return normalizeTypeIcons(raw);
   }
 
   getIconUri(objectType: string, dirty: boolean): vscode.Uri | undefined {
