@@ -70,6 +70,20 @@ test('collectLeaves skips a subfolder whose readDirectory fails, but still walks
   assert.match(errors[0].error.message, /no entries for root\/pkgA/);
 });
 
+test('collectLeaves invokes onLeaf once per leaf as it is discovered', async () => {
+  const tree = new Map([
+    ['root', [['pkgA', DIR], ['obj1.prog.abap', FILE]]],
+    ['root/pkgA', [['obj2.clas.abap', FILE]]],
+  ]);
+  const fsLike = makeFakeFs(tree);
+  const seen = [];
+
+  const leaves = await collectLeaves(fsLike, DIR, 'root', joinChild, undefined, (uri) => seen.push(uri));
+
+  assert.deepEqual(seen.sort(), leaves.sort());
+  assert.equal(seen.length, 2);
+});
+
 test('shouldConfirm is false at or below the threshold, true above it', () => {
   assert.equal(shouldConfirm(DEFAULT_CONFIRM_THRESHOLD), false);
   assert.equal(shouldConfirm(DEFAULT_CONFIRM_THRESHOLD + 1), true);

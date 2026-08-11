@@ -268,12 +268,19 @@ async function mirrorFolderCommand(uriArg: unknown): Promise<void> {
 
   let leaves: vscode.Uri[];
   try {
-    leaves = await collectLeaves(
-      fsLike,
-      vscode.FileType.Directory,
-      folderUri,
-      joinChild,
-      (uri, e) => outputChannel.appendLine(`Could not list ${uri.toString()}: ${e.message}`)
+    leaves = await vscode.window.withProgress(
+      { location: vscode.ProgressLocation.Notification, title: 'ABAP Mirror: scanning folder for objects' },
+      async progress => {
+        let found = 0;
+        return collectLeaves(
+          fsLike,
+          vscode.FileType.Directory,
+          folderUri,
+          joinChild,
+          (uri, e) => outputChannel.appendLine(`Could not list ${uri.toString()}: ${e.message}`),
+          () => progress.report({ message: `${++found} object(s) found` })
+        );
+      }
     );
   } catch (e) {
     vscode.window.showErrorMessage(`ABAP Mirror: could not read folder contents (${(e as Error).message})`);

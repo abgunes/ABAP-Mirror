@@ -10,7 +10,8 @@ export async function collectLeaves<TUri, TFileType>(
   directoryFileType: TFileType,
   rootUri: TUri,
   joinChild: (parent: TUri, name: string) => TUri,
-  onError?: (uri: TUri, error: Error) => void
+  onError?: (uri: TUri, error: Error) => void,
+  onLeaf?: (uri: TUri) => void
 ): Promise<TUri[]> {
   const leaves: TUri[] = [];
 
@@ -28,6 +29,7 @@ export async function collectLeaves<TUri, TFileType>(
         await walk(childUri);
       } else {
         leaves.push(childUri);
+        if (onLeaf) onLeaf(childUri);
       }
     }
   }
