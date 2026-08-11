@@ -95,6 +95,16 @@ in the ABAP Mirror Files panel until the retry succeeds.
 | **ABAP Mirror - Retry Sync** | Retries syncing a single object back to ADT. Shows up as a hover icon and right-click entry in the ABAP Mirror Files panel, only on an object that isn't fully synced. |
 | **ABAP Mirror - Retry Sync for Folder** | Retries syncing every unsynced object under a folder back to ADT. Shows up as a hover icon and right-click entry in the ABAP Mirror Files panel, only on a folder containing something unsynced. |
 
+<br/>
+
+<p align="center">
+  <img src="images/app_icons.png" alt="ABAP Mirror Files panel title bar: the gear icon opens Configure Type Icons, the sync icon opens Retry Failed Syncs" width="700" />
+</p>
+
+<br/>
+
+The ABAP Mirror Files panel's title bar carries two icons, shown above: **1** is the gear, **ABAP Mirror - Configure Type Icons**. **2** is the sync icon, **ABAP Mirror - Retry Failed Syncs**.
+
 ## Settings
 
 | Setting | Default | Description |
