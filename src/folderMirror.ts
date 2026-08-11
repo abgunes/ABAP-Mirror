@@ -11,11 +11,13 @@ export async function collectLeaves<TUri, TFileType>(
   rootUri: TUri,
   joinChild: (parent: TUri, name: string) => TUri,
   onError?: (uri: TUri, error: Error) => void,
-  onLeaf?: (uri: TUri) => void
+  onLeaf?: (uri: TUri) => void,
+  isCancelled?: () => boolean
 ): Promise<TUri[]> {
   const leaves: TUri[] = [];
 
   async function walk(uri: TUri): Promise<void> {
+    if (isCancelled && isCancelled()) return;
     let entries: [string, TFileType][];
     try {
       entries = await fsLike.readDirectory(uri);

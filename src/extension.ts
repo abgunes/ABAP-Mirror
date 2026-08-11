@@ -267,23 +267,32 @@ async function mirrorFolderCommand(uriArg: unknown): Promise<void> {
   const joinChild = (parentUri: vscode.Uri, name: string) => vscode.Uri.joinPath(parentUri, name);
 
   let leaves: vscode.Uri[];
+  let scanCancelled = false;
   try {
     leaves = await vscode.window.withProgress(
-      { location: vscode.ProgressLocation.Notification, title: 'ABAP Mirror: scanning folder for objects' },
-      async progress => {
+      { location: vscode.ProgressLocation.Notification, title: 'ABAP Mirror: scanning folder for objects', cancellable: true },
+      async (progress, token) => {
         let found = 0;
-        return collectLeaves(
+        const result = await collectLeaves(
           fsLike,
           vscode.FileType.Directory,
           folderUri,
           joinChild,
           (uri, e) => outputChannel.appendLine(`Could not list ${uri.toString()}: ${e.message}`),
-          () => progress.report({ message: `${++found} object(s) found` })
+          () => progress.report({ message: `${++found} object(s) found` }),
+          () => token.isCancellationRequested
         );
+        scanCancelled = token.isCancellationRequested;
+        return result;
       }
     );
   } catch (e) {
     vscode.window.showErrorMessage(`ABAP Mirror: could not read folder contents (${(e as Error).message})`);
+    return;
+  }
+
+  if (scanCancelled) {
+    vscode.window.showInformationMessage('ABAP Mirror: folder scan cancelled.');
     return;
   }
 
@@ -295,8 +304,8 @@ async function mirrorFolderCommand(uriArg: unknown): Promise<void> {
   if (shouldConfirm(leaves.length, DEFAULT_CONFIRM_THRESHOLD)) {
     const choice = await vscode.window.showWarningMessage(
       `Mirror ${leaves.length} objects under ${folderUri.path}? This may take a while.`,
-      { modal: true },
-      'Mirror'
+      'Mirror',
+      'Cancel'
     );
     if (choice !== 'Mirror') return;
   }

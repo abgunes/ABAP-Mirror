@@ -84,6 +84,28 @@ test('collectLeaves invokes onLeaf once per leaf as it is discovered', async () 
   assert.equal(seen.length, 2);
 });
 
+test('collectLeaves stops walking once isCancelled returns true, keeping leaves found so far', async () => {
+  const tree = new Map([
+    ['root', [['pkgA', DIR], ['pkgB', DIR]]],
+    ['root/pkgA', [['obj1.prog.abap', FILE]]],
+    ['root/pkgB', [['obj2.clas.abap', FILE]]],
+  ]);
+  const fsLike = makeFakeFs(tree);
+  let cancelled = false;
+
+  const leaves = await collectLeaves(
+    fsLike,
+    DIR,
+    'root',
+    joinChild,
+    undefined,
+    () => { cancelled = true; },
+    () => cancelled
+  );
+
+  assert.deepEqual(leaves, ['root/pkgA/obj1.prog.abap']);
+});
+
 test('shouldConfirm is false at or below the threshold, true above it', () => {
   assert.equal(shouldConfirm(DEFAULT_CONFIRM_THRESHOLD), false);
   assert.equal(shouldConfirm(DEFAULT_CONFIRM_THRESHOLD + 1), true);
