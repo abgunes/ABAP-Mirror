@@ -256,7 +256,7 @@ Mirror files live under `~/.abap-mirror/`, in your home directory and outside an
 
 ## Release notes
 
-### Unreleased
+### 0.2.2
 
 - `abap_activate`, `abap_lock`, `abap_unlock` and `abap_write_source`/`abap_edit_source` with `activate` are
   refused while any editor of the same object has unsaved changes. ADT's own commands would otherwise save those
