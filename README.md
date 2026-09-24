@@ -250,6 +250,10 @@ Mirror files live under `~/.abap-mirror/`, in your home directory and outside an
 
 ## Release notes
 
+### 0.2.1
+
+- Documents the MCP server with screenshots (enabling `abapMirror.mcp.enabled`, the **Copy MCP Client Config** picker, and a connected client's tool list) and clarifies that `abap-mirror` complements rather than replaces SAP's own ADT MCP tooling.
+
 ### 0.2.0
 
 - New optional **MCP server** (`abap-mirror`): lets MCP clients such as Cursor, GitHub Copilot, Cline and Claude
