@@ -186,3 +186,53 @@ test('abap_lock does nothing when denied', async () => {
   await assert.rejects(call(lockTool, { uri: CLASS_FOLDER }, deps), /User denied locking ZCL_DEMO_JOB/);
   assert.equal(deps.bridge.calls.locks.length, 0);
 });
+
+const UNSAVED = [CLASS_MAIN_URI.replace('zcl_demo_job.clas.abap', 'zcl_demo_job.clas.locals_imp.abap')];
+
+test('abap_unlock is refused before confirmation while related editors are unsaved', async () => {
+  const { deps, confirmRequests } = createDeps();
+  deps.bridge.unsavedByUri.set(CLASS_MAIN_URI, UNSAVED);
+  await assert.rejects(
+    call(unlockTool, { uri: CLASS_FOLDER }, deps),
+    /unlock refused: .*zcl_demo_job\.clas\.locals_imp\.abap.*discard them/
+  );
+  assert.equal(confirmRequests.length, 0);
+  assert.equal(deps.bridge.calls.unlocks.length, 0);
+});
+
+test('abap_lock is refused with the real reason while related editors are unsaved', async () => {
+  const { deps } = createDeps();
+  deps.bridge.unsavedByUri.set(CLASS_MAIN_URI, UNSAVED);
+  await assert.rejects(call(lockTool, { uri: CLASS_FOLDER }, deps), /lock refused: .*unsaved changes/);
+  assert.equal(deps.bridge.calls.locks.length, 0);
+});
+
+test('abap_activate is refused before confirmation while related editors are unsaved', async () => {
+  const { deps, confirmRequests } = createDeps();
+  deps.bridge.unsavedByUri.set(CLASS_MAIN_URI, UNSAVED);
+  await assert.rejects(call(activateTool, { uris: [CLASS_FOLDER] }, deps), /activate refused: .*without review/);
+  assert.equal(confirmRequests.length, 0);
+  assert.equal(deps.bridge.calls.activations.length, 0);
+});
+
+test('abap_write_source with activate writes nothing while related editors are unsaved', async () => {
+  const { deps, confirmRequests } = createDeps();
+  deps.bridge.unsavedByUri.set(CLASS_MAIN_URI, UNSAVED);
+  await assert.rejects(
+    call(writeSourceTool, { uri: CLASS_MAIN_URI, source: NEW_SOURCE, baseHash: BASE, activate: true }, deps),
+    /activate refused/
+  );
+  assert.equal(confirmRequests.length, 0);
+  assert.equal(deps.bridge.calls.writes.length, 0);
+});
+
+test('abap_write_source without activate is not blocked by unsaved related editors', async () => {
+  const { deps } = createDeps();
+  deps.bridge.unsavedByUri.set(CLASS_MAIN_URI, UNSAVED);
+  const out = await call(writeSourceTool, { uri: CLASS_MAIN_URI, source: NEW_SOURCE, baseHash: BASE }, deps);
+  assert.equal(out.saved, true);
+});
+
+test('abap_unlock is marked destructive', () => {
+  assert.equal(unlockTool.annotations.destructiveHint, true);
+});

@@ -3,12 +3,19 @@ import { classifyFile, FileClassification, lastSegment } from '../abapUri';
 import { sha256Hex } from '../hash';
 import { abapUriSchema, diagnosticSchema } from '../schemas';
 import { withTimeout } from '../taskQueue';
-import { DiagnosticInfo, StaleSourceError, TimeoutError, ToolError } from '../types';
+import { DiagnosticInfo, GuardedCommand, StaleSourceError, TimeoutError, ToolError, UnsavedChangesError } from '../types';
 import { confirmOrThrow, errorMessage, mainSourceOf, readSource, requireDestination, resolveObject } from './common';
 import { defineTool, ToolDeps } from './toolDefinition';
 
 function hasErrors(diagnostics: DiagnosticInfo[]): boolean {
   return diagnostics.some((d) => d.severity === 'error');
+}
+
+// Refuses before the user is asked to confirm; the bridge checks again right
+// before running SAP's command.
+function assertNoUnsavedRelated(deps: ToolDeps, uris: string[], command: GuardedCommand): void {
+  const unsaved = [...new Set(uris.flatMap((uri) => deps.bridge.unsavedRelated(uri)))];
+  if (unsaved.length > 0) throw new UnsavedChangesError(command, unsaved);
 }
 
 const baseHashSchema = z.string().regex(/^[a-f0-9]{64}$/, 'Use the hash returned by abap_read_object.');
@@ -39,6 +46,7 @@ async function performWrite(
     return { saved: false, newHash: args.baseHash, diagnostics: await deps.bridge.diagnostics(args.uri) };
   }
   const noOp = current === source;
+  if (args.activate) assertNoUnsavedRelated(deps, [args.uri], 'activate');
   await confirmOrThrow(deps, {
     action: noOp ? 'activate' : args.activate ? 'write_activate' : 'write',
     objectLabel: `${leaf.name} (${leaf.part})`,
@@ -174,7 +182,8 @@ export const activateTool = defineTool({
   title: 'Activate ABAP objects',
   description:
     'Activates up to 20 ABAP objects through the SAP ADT extension, one after another, and returns the ' +
-    'diagnostics of each. The user may have to confirm in VS Code.',
+    'diagnostics of each. The user may have to confirm in VS Code. Refused while any of them has unsaved changes ' +
+    "in VS Code, because SAP's activate would save those unreviewed changes first.",
   inputSchema: {
     uris: z.array(abapUriSchema).min(1).max(20).describe('Object folder URIs or any of their source files.'),
   },
@@ -193,6 +202,7 @@ export const activateTool = defineTool({
     const objects = await Promise.all(args.uris.map((uri) => resolveObject(deps, uri)));
     const mains = objects.map(mainSourceOf);
     return deps.uiQueue.run(async () => {
+      assertNoUnsavedRelated(deps, mains.map((m) => m.uri), 'activate');
       await confirmOrThrow(deps, {
         action: 'activate',
         objectLabel: mains.map((m) => m.classification.name).join(', '),
@@ -218,6 +228,7 @@ async function runLockCommand(deps: ToolDeps, uri: string, kind: 'lock' | 'unloc
   const object = await resolveObject(deps, uri);
   const main = mainSourceOf(object);
   return deps.uiQueue.run(async () => {
+    assertNoUnsavedRelated(deps, [main.uri], kind);
     await confirmOrThrow(deps, {
       action: kind,
       objectLabel: main.classification.name,
@@ -240,8 +251,8 @@ export const lockTool = defineTool({
   title: 'Lock an ABAP object',
   description:
     'Asks the SAP ADT extension to lock an object for editing. Fails when SAP refuses the lock (for example another ' +
-    'session is editing the object). status is "unknown" when ADT made no call to SAP, for example because the ' +
-    'object was already locked; saving also locks implicitly.',
+    'session is editing the object) or when the object has unsaved changes in VS Code. status is "unknown" when ' +
+    'ADT made no call to SAP, for example because the object was already locked; saving also locks implicitly.',
   inputSchema: { uri: abapUriSchema },
   outputSchema: lockOutputSchema,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
@@ -253,10 +264,12 @@ export const lockTool = defineTool({
 export const unlockTool = defineTool({
   name: 'abap_unlock',
   title: 'Unlock an ABAP object',
-  description: 'Asks the SAP ADT extension to release the lock on an object.',
+  description:
+    'Asks the SAP ADT extension to release the lock on an object. Refused while the object has unsaved changes ' +
+    "in VS Code, because SAP's unlock would discard them.",
   inputSchema: { uri: abapUriSchema },
   outputSchema: lockOutputSchema,
-  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+  annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
   async handler(args, deps) {
     return runLockCommand(deps, args.uri, 'unlock');
   },

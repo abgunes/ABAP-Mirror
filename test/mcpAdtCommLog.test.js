@@ -14,8 +14,8 @@ function stamp(date) {
   );
 }
 
-function call(date, status, query, { method = 'POST', destination = 'DEV_SYS' } = {}) {
-  return `${stamp(date)} [info] ${destination}   ${method.padEnd(4)} ${status}    82(   22|   59)ms   ../oo/classes/zcl_demo${query}\n`;
+function call(date, status, query, { method = 'POST', destination = 'DEV_SYS', resource = '../oo/classes/zcl_demo' } = {}) {
+  return `${stamp(date)} [info] ${destination}   ${method.padEnd(4)} ${status}    82(   22|   59)ms   ${resource}${query}\n`;
 }
 
 const LOCK = '?_action=LOCK&accessMode=MODIFY';
@@ -40,15 +40,15 @@ test('parseLockStatus returns the status of the first matching call since the gi
     call(at(40), 403, LOCK),
     call(at(50), 200, LOCK),
   ].join('');
-  assert.equal(parseLockStatus(text, 'LOCK', 'dev_sys', since.getTime()), 403);
-  assert.equal(parseLockStatus(text, 'UNLOCK', 'DEV_SYS', since.getTime()), 200);
-  assert.equal(parseLockStatus(text, 'LOCK', 'DEV_SYS', at(1000).getTime()), undefined);
+  assert.equal(parseLockStatus(text, 'LOCK', 'dev_sys', 'ZCL_DEMO', since.getTime()), 403);
+  assert.equal(parseLockStatus(text, 'UNLOCK', 'DEV_SYS', 'ZCL_DEMO', since.getTime()), 200);
+  assert.equal(parseLockStatus(text, 'LOCK', 'DEV_SYS', 'ZCL_DEMO', at(1000).getTime()), undefined);
 });
 
 test('parseLockStatus does not mistake a save carrying a lock handle for a lock call', () => {
   const now = new Date();
   const text = call(now, 200, '/source/main?lockHandle=ABC123', { method: 'PUT' }).replace(/\n/, '\r\n');
-  assert.equal(parseLockStatus(text, 'LOCK', 'DEV_SYS', now.getTime() - 1000), undefined);
+  assert.equal(parseLockStatus(text, 'LOCK', 'DEV_SYS', 'ZCL_DEMO', now.getTime() - 1000), undefined);
 });
 
 test('createAdtCommReader finds a call logged shortly after the command', async () => {
@@ -58,14 +58,34 @@ test('createAdtCommReader finds a call logged shortly after the command', async 
   const since = Date.now();
   setTimeout(() => fs.appendFileSync(file, call(new Date(), 403, LOCK)), 200);
   try {
-    assert.equal(await createAdtCommReader(file, 50).lockStatusSince('LOCK', 'DEV_SYS', since, 2000), 403);
+    assert.equal(await createAdtCommReader(file, 50).lockStatusSince('LOCK', 'DEV_SYS', 'ZCL_DEMO', since, 2000), 403);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });
 
 test('createAdtCommReader gives up quietly with no path, a missing file, or no call', async () => {
-  assert.equal(await createAdtCommReader(undefined).lockStatusSince('LOCK', 'DEV_SYS', 0, 100), undefined);
+  assert.equal(await createAdtCommReader(undefined).lockStatusSince('LOCK', 'DEV_SYS', 'ZCL_DEMO', 0, 100), undefined);
   const missing = path.join(os.tmpdir(), 'no-such-dir', 'x.log');
-  assert.equal(await createAdtCommReader(missing, 20).lockStatusSince('LOCK', 'DEV_SYS', 0, 60), undefined);
+  assert.equal(await createAdtCommReader(missing, 20).lockStatusSince('LOCK', 'DEV_SYS', 'ZCL_DEMO', 0, 60), undefined);
+});
+
+test('parseLockStatus only takes the call for the requested object', () => {
+  const since = new Date(2026, 0, 31, 23, 16, 18, 0);
+  const at = (ms) => new Date(since.getTime() + ms);
+  const text = [
+    call(at(10), 403, LOCK, { resource: '../programs/programs/zdemo_report' }),
+    call(at(20), 200, LOCK),
+  ].join('');
+  assert.equal(parseLockStatus(text, 'LOCK', 'DEV_SYS', 'ZCL_DEMO', since.getTime()), 200);
+  assert.equal(parseLockStatus(text, 'LOCK', 'DEV_SYS', 'ZDEMO_REPORT', since.getTime()), 403);
+  assert.equal(parseLockStatus(text, 'LOCK', 'DEV_SYS', 'ZCL_OTHER', since.getTime()), undefined);
+  assert.equal(parseLockStatus(text, 'LOCK', 'DEV_SYS', undefined, since.getTime()), 403);
+});
+
+test('parseLockStatus matches namespaced objects logged URL-encoded', () => {
+  const now = new Date();
+  const text = call(now, 200, LOCK, { resource: '../oo/classes/%2fdemo%2fcl_job' });
+  assert.equal(parseLockStatus(text, 'LOCK', 'DEV_SYS', '#DEMO#CL_JOB', now.getTime() - 1000), 200);
+  assert.equal(parseLockStatus(text, 'LOCK', 'DEV_SYS', '/DEMO/CL_JOB', now.getTime() - 1000), 200);
 });

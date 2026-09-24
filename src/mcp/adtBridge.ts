@@ -1,5 +1,6 @@
+import * as path from 'node:path';
 import * as vscode from 'vscode';
-import { destinationOf } from './abapUri';
+import { classifyFile, destinationOf, lastSegment } from './abapUri';
 import { AdtCommReader, createAdtCommReader } from './adtCommLog';
 import { AdtLogReader, createAdtLogReader } from './adtLog';
 import { AdtTraceReader, createAdtTraceReader, LockMethod } from './adtTraceLog';
@@ -8,11 +9,13 @@ import {
   AdtBridge,
   DiagnosticInfo,
   DirEntry,
+  GuardedCommand,
   NotFoundError,
   ReferenceLocation,
   StaleSourceError,
   SystemInfo,
   ToolError,
+  UnsavedChangesError,
 } from './types';
 
 // The only place where the MCP module talks to VS Code and SAP's ADT
@@ -73,6 +76,20 @@ export function createAdtBridge(
     if (!extension.isActive) await extension.activate();
   }
 
+  // SAP relates the editors of one object by folder (path.dirname of the
+  // URI path) when deciding what its activate/lock/unlock commands touch.
+  function unsavedRelated(uri: string): string[] {
+    const folder = path.posix.dirname(toUri(uri).path);
+    return vscode.workspace.textDocuments
+      .filter((d) => d.uri.scheme === 'abap' && d.isDirty && path.posix.dirname(d.uri.path) === folder)
+      .map((d) => d.uri.toString());
+  }
+
+  function assertNoUnsavedRelated(uri: string, command: GuardedCommand): void {
+    const unsaved = unsavedRelated(uri);
+    if (unsaved.length > 0) throw new UnsavedChangesError(command, unsaved);
+  }
+
   // SAP's activate/lock/unlock commands take no arguments and act on the
   // active editor, so show the document, run the command, then give the
   // user their previous editor back.
@@ -121,12 +138,17 @@ export function createAdtBridge(
   // could see (for example the object was already in that state). Throws
   // when SAP refused, quoting SAP's text when ADT's trace has it.
   async function runLockCommand(uri: string, method: LockMethod, action: 'Lock' | 'Unlock'): Promise<boolean> {
+    assertNoUnsavedRelated(uri, action === 'Lock' ? 'lock' : 'unlock');
     const since = Date.now();
     await runOnActiveEditor(uri, `adt-vscode.${method}`);
     const destination = destinationOf(uri) ?? '';
     const httpAction = action === 'Lock' ? 'LOCK' : 'UNLOCK';
+    // ADT locks the whole object, and its HTTP log names it last in the path
+    // (../oo/classes/zcl_demo?_action=LOCK), so a lock the user runs on
+    // another object at the same moment is not mistaken for ours.
+    const objectName = classifyFile(lastSegment(uri))?.name;
     const [status, reply] = await Promise.all([
-      adtComm.lockStatusSince(httpAction, destination, since, SAP_REASON_WAIT_MS),
+      adtComm.lockStatusSince(httpAction, destination, objectName, since, SAP_REASON_WAIT_MS),
       adtTrace.lockReplySince(method, since, SAP_REASON_WAIT_MS),
     ]);
     if (reply?.errorMessage) throw new ToolError(`${action} failed. SAP says: ${reply.errorMessage}`);
@@ -284,13 +306,18 @@ export function createAdtBridge(
       return runCheck(uri);
     },
 
+    unsavedRelated,
+
     async activate(uri: string): Promise<void> {
       const key = toUri(uri).toString();
+      assertNoUnsavedRelated(uri, 'activate');
       // Check first so a syntax error surfaces as diagnostics instead of
       // SAP's own interactive "activate anyway?" dialog. Only activate when
       // the check comes back clean.
       const checkDiagnostics = await runCheck(uri);
       if (checkDiagnostics.some((d) => d.severity === 'error')) return;
+      // Checked again: the syntax check takes seconds and the user may type meanwhile.
+      assertNoUnsavedRelated(uri, 'activate');
       const beforeActivate = Date.now();
       await runOnActiveEditor(uri, 'adt-vscode.activate');
       lastOperation.set(key, beforeActivate);
