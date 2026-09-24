@@ -42,6 +42,8 @@ export interface AdtBridge {
   writeSource(uri: string, source: string, baseHash: string): Promise<{ newHash: string }>;
   /** Runs SAP's syntax check without activating; returns its diagnostics. */
   check(uri: string): Promise<DiagnosticInfo[]>;
+  /** URIs of open abap:// documents of the same object (same folder, as SAP relates them) with unsaved changes. */
+  unsavedRelated(uri: string): string[];
   activate(uri: string): Promise<void>;
   lock(uri: string): Promise<'locked' | 'unknown'>;
   unlock(uri: string): Promise<'unlocked' | 'unknown'>;
@@ -86,6 +88,29 @@ export class NotFoundError extends ToolError {
   constructor(uri: string) {
     super(`Not found: ${uri}`);
     this.name = 'NotFoundError';
+  }
+}
+
+export type GuardedCommand = 'activate' | 'lock' | 'unlock';
+
+// SAP's own commands act on unsaved editors of the same object: activate
+// saves them to SAP first, unlock reverts (discards) the active one, lock
+// refuses silently. None of that was reviewed by whoever confirmed the MCP
+// call, so the call is refused instead.
+const UNSAVED_CONSEQUENCE: Record<GuardedCommand, string> = {
+  activate: "SAP's activate would save them to SAP without review",
+  lock: "SAP's lock refuses to run while they exist",
+  unlock: "SAP's unlock would discard them",
+};
+
+export class UnsavedChangesError extends ToolError {
+  constructor(command: GuardedCommand, uris: string[]) {
+    const names = uris.map((u) => u.slice(u.lastIndexOf('/') + 1).replace(/%20/g, ' ')).join(', ');
+    super(
+      `${command} refused: related editors have unsaved changes in VS Code (${names}), and ` +
+        `${UNSAVED_CONSEQUENCE[command]}. Ask the user to save or revert them in VS Code, then retry.`
+    );
+    this.name = 'UnsavedChangesError';
   }
 }
 

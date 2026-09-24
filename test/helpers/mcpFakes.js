@@ -119,6 +119,10 @@ function createFakeBridge(options = {}) {
       calls.checks.push(uri);
       return bridge.diagnosticsByUri.get(uri) ?? [];
     },
+    unsavedByUri: new Map(),
+    unsavedRelated(uri) {
+      return bridge.unsavedByUri.get(uri) ?? [];
+    },
     async activate(uri) {
       calls.activations.push(uri);
       if (options.activateImpl) await options.activateImpl(uri);

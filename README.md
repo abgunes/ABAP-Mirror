@@ -152,8 +152,9 @@ one of the client formats, here **mcpServers JSON** for Cursor, Cline, Windsurf 
 
 Once a client has the config, it can list the server's tools. In Claude Code, for example, `/mcp` shows
 `abap-mirror` as `Connected` with every tool below: `read-only` ones never change anything in SAP,
-`destructive` ones write source, and `abap_activate`/`abap_lock`/`abap_unlock` carry neither tag because they
-change state in SAP without touching an object's source.
+`destructive` ones write source, and `abap_activate`/`abap_lock` carry neither tag because they change state in
+SAP without touching an object's source. `abap_unlock` is tagged `destructive` since the screenshot below was
+taken, because ADT's own unlock command discards unsaved changes (abap-mirror refuses it in that case, see below).
 
 <br/>
 
@@ -184,6 +185,10 @@ Good to know:
 - Checking, saving, activating, locking and unlocking run one at a time and briefly show the object in an editor
   tab, because ADT performs these on the active editor. If SAP asks for a transport request, pick it in VS Code.
 - An object with unsaved changes in VS Code is never overwritten: save or revert it first.
+- Activate, lock and unlock are refused while any editor of the same object (for example a class's local types
+  tab) has unsaved changes, before you are asked to confirm. ADT's own commands would otherwise act on those
+  changes without review: activate saves them to SAP first, unlock discards them, and lock refuses without saying
+  why. Saving with `abap_write_source`/`abap_edit_source` is not affected unless `activate` is set.
 - If a save fails (for example another user holds the lock), the tool error quotes SAP's exact reason
   ("SAP says: ..."). abap-mirror reads it from the ADT extension's own log file
   (`SAPSE.adt-vscode/adtWorkspace/.metadata/.log` in VS Code's workspace storage), because VS Code does not let
@@ -192,7 +197,8 @@ Good to know:
 - Lock and unlock report `locked`/`unlocked`, or fail with the HTTP status SAP answered (for example 403 when
   another session is editing the object). abap-mirror reads it from ADT's HTTP log
   (`SAPSE.adt-vscode/ADT Communication Log.log` in VS Code's logs folder), which ADT always writes; no setup is
-  needed. `unknown` means ADT made no call to SAP, for example because the object was already locked.
+  needed. Only a call for the same object counts, so a lock you run on another object at the same moment is not
+  mistaken for it. `unknown` means ADT made no call to SAP, for example because the object was already locked.
 - ADT does not log SAP's wording for a refused lock. If you want it in the error too ("SAP says: User ... is
   currently editing ..."), turn on ADT's language client tracing: add
   `"adtLanguageClient.trace.server": "verbose"` to your user settings, then in the Output panel pick
@@ -249,6 +255,14 @@ Mirror files live under `~/.abap-mirror/`, in your home directory and outside an
 - If syncing a change back fails, retrying (via the error notification's **Try Again** button) re-sends the mirror's current on-disk content; it does not re-check whether the ADT document itself changed in the meantime.
 
 ## Release notes
+
+### 0.2.2
+
+- `abap_activate`, `abap_lock`, `abap_unlock` and `abap_write_source`/`abap_edit_source` with `activate` are
+  refused while any editor of the same object has unsaved changes. ADT's own commands would otherwise save those
+  changes to SAP without review (activate) or discard them (unlock).
+- `abap_unlock` is now tagged `destructive`.
+- Lock and unlock status only counts ADT's HTTP call for the requested object, not any lock on the same system.
 
 ### 0.2.1
 
