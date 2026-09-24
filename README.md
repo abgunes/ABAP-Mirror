@@ -119,10 +119,49 @@ lets any MCP client (Cursor, GitHub Copilot, Cline, Claude Code, ...) work with 
 are connected to through SAP ADT in VS Code. It uses ADT's existing connection and login; abap-mirror stores no
 SAP credentials of its own. It is independent of the mirror files.
 
+**Not an alternative to SAP's own ADT MCP tooling, use both together:** SAP's ADT tools that ship for AI agents are
+only reachable from inside VS Code, through GitHub Copilot. abap-mirror exists to bring that same kind of ABAP
+access (list, search, read, write, activate, lock, ...) to every other MCP client too, Cursor, Claude Code, Cline
+and the rest, including tools SAP's own integration does not directly support. It does not replace SAP's ADT
+tooling; run the two side by side, and use whichever fits the client you're in.
+
 **Turn it on:** set `abapMirror.mcp.enabled` to `true`. An `abap-mirror MCP :2240` item appears in the status bar.
+
+<br/>
+
+<p align="center">
+  <img src="images/mcp_configuration.png" alt="VS Code Settings: the ABAP Mirror > Mcp: Enabled checkbox, highlighted, with its description of what the MCP server lets external AI tools do" width="800" />
+</p>
+
+<br/>
+
 **Connect a client:** run **ABAP Mirror - Copy MCP Client Config** (or click the status bar item), pick your
 client's format, and paste it into that client's MCP configuration. The snippet contains a secret token, so treat
 it like a password.
+
+<br/>
+
+<p align="center">
+  <img src="images/mcp_activate.png" alt="Copy abap-mirror MCP client config quick pick, with the client format options (mcpServers JSON, Claude Code CLI command, VS Code mcp.json)" width="700" />
+</p>
+
+<br/>
+
+**1** is the `abap-mirror MCP :2240` status bar item; clicking it opens the same picker as the command. **2** is
+one of the client formats, here **mcpServers JSON** for Cursor, Cline, Windsurf and most other clients.
+
+Once a client has the config, it can list the server's tools. In Claude Code, for example, `/mcp` shows
+`abap-mirror` as `Connected` with every tool below: `read-only` ones never change anything in SAP,
+`destructive` ones write source, and `abap_activate`/`abap_lock`/`abap_unlock` carry neither tag because they
+change state in SAP without touching an object's source.
+
+<br/>
+
+<p align="center">
+  <img src="images/mcp_tools.png" alt="Claude Code's /mcp panel: abap-mirror listed as Connected, with its tools each tagged read-only, destructive, or untagged for abap_activate/abap_lock/abap_unlock" width="500" />
+</p>
+
+<br/>
 
 | Tool | What it does |
 |---|---|
