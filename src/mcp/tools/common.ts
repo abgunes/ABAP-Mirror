@@ -1,6 +1,6 @@
 import { classifyFile, destinationOf, FileClassification, isAbapUri, lastSegment, parentUri } from '../abapUri';
 import { withTimeout } from '../taskQueue';
-import { ConfirmRequest, DirEntry, NOT_CONNECTED_MESSAGE, SourcePart, SystemInfo, ToolError } from '../types';
+import { ConfirmRequest, DirEntry, NOT_CONNECTED_MESSAGE, SourcePart, SystemInfo, TimeoutError, ToolError } from '../types';
 import { ToolDeps } from './toolDefinition';
 
 // Helpers shared by several tools. They only use ToolDeps, never vscode.
@@ -79,7 +79,16 @@ const ACTION_LABEL: Record<ConfirmRequest['action'], string> = {
 
 export async function confirmOrThrow(deps: ToolDeps, request: ConfirmRequest): Promise<void> {
   if (!deps.settings.confirmWrites()) return;
-  const allowed = await deps.confirmer.confirm(request);
+  let allowed: boolean;
+  try {
+    allowed = await withTimeout(deps.confirmer.confirm(request), deps.timeouts.interactive, 'Confirmation');
+  } catch (error) {
+    if (!(error instanceof TimeoutError)) throw error;
+    const seconds = Math.round(deps.timeouts.interactive / 1000);
+    throw new ToolError(
+      `No answer in VS Code within ${seconds} s for ${ACTION_LABEL[request.action]} ${request.objectLabel}; treated as denied.`
+    );
+  }
   if (!allowed) throw new ToolError(`User denied ${ACTION_LABEL[request.action]} ${request.objectLabel} in VS Code.`);
 }
 

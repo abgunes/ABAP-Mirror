@@ -23,16 +23,16 @@ test('crawl indexes objects in prefix packages and their subpackages only', asyn
   const { read } = readerFor(defaultTreeSpec());
   const result = await crawlDestination(read, { rootUri: ROOT, packagePrefixes: ['Z', 'Y'] });
   const names = result.entries.map((e) => `${e.name}:${e.type}:${e.package}`).sort();
-  assert.deepEqual(names, ['ZCL_DEMO_JOB:CLAS:ZDEMO', 'ZIF_DEMO:INTF:YTOOLS', 'ZI_DEMO_VIEW:DDLS:ZDEMO']);
+  assert.deepEqual(names, ['ZCL_DEMO_JOB:CLAS:ZDEMO', 'ZIF_DEMO:INTF:YDEMO', 'ZI_DEMO_VIEW:DDLS:ZDEMO']);
   assert.equal(result.entries.find((e) => e.name === 'ZCL_DEMO_JOB').uri, CLASS_FOLDER);
-  assert.equal(result.packagesScanned, 3); // ZDEMO_ROOT, ZDEMO, YTOOLS
+  assert.equal(result.packagesScanned, 3); // ZDEMO_ROOT, ZDEMO, YDEMO
   assert.equal(result.truncated, false);
   assert.equal(result.cancelled, false);
 });
 
 test('crawl with explicit packages ignores the prefixes', async () => {
   const { read } = readerFor(defaultTreeSpec());
-  const result = await crawlDestination(read, { rootUri: ROOT, packagePrefixes: ['Z'], packages: ['ytools'] });
+  const result = await crawlDestination(read, { rootUri: ROOT, packagePrefixes: ['Z'], packages: ['ydemo'] });
   assert.deepEqual(result.entries.map((e) => e.name), ['ZIF_DEMO']);
 });
 
@@ -67,7 +67,7 @@ test('crawl stops when cancelled', async () => {
 test('crawl skips a folder that fails to read and goes on', async () => {
   const tree = buildTree(defaultTreeSpec());
   const read = async (uri) => {
-    if (uri.endsWith('/YTOOLS')) throw new Error('403');
+    if (uri.endsWith('/YDEMO')) throw new Error('403');
     return tree.folders.get(uri);
   };
   const result = await crawlDestination(read, { rootUri: ROOT, packagePrefixes: ['Z', 'Y'] });

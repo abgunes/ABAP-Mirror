@@ -1,5 +1,8 @@
 import * as vscode from 'vscode';
 import { destinationOf } from './abapUri';
+import { AdtCommReader, createAdtCommReader } from './adtCommLog';
+import { AdtLogReader, createAdtLogReader } from './adtLog';
+import { AdtTraceReader, createAdtTraceReader, LockMethod } from './adtTraceLog';
 import { sha256Hex } from './hash';
 import {
   AdtBridge,
@@ -19,6 +22,16 @@ import {
 const ADT_EXTENSION_ID = 'sapse.adt-vscode';
 const DIAGNOSTICS_WAIT_MS = 10_000;
 const MAX_SNIPPET_FILES = 50;
+// SAP's ADT extension reports the real reason a save/lock failed (for
+// example another user holding the lock) only in its own notification, not
+// through the promise we are awaiting, and VS Code does not let one extension
+// observe another's notifications. A failed save lands in ADT's Eclipse log
+// (./adtLog); a lock/unlock shows up in ADT's HTTP log (./adtCommLog) and,
+// with tracing on, with SAP's text in its trace (./adtTraceLog). The hint
+// below is the fallback when the logs have nothing.
+const CHECK_NOTIFICATIONS_HINT = "check VS Code's Notifications (the bell icon) for SAP's exact reason";
+// ADT writes its log entries a few hundred milliseconds after the call.
+const SAP_REASON_WAIT_MS = 2_000;
 
 function toUri(uri: string): vscode.Uri {
   return vscode.Uri.parse(uri, true);
@@ -38,13 +51,20 @@ const SEVERITY: Record<number, DiagnosticInfo['severity']> = {
   [vscode.DiagnosticSeverity.Hint]: 'hint',
 };
 
-export function createAdtBridge(log: (line: string) => void): AdtBridge & vscode.Disposable {
+export function createAdtBridge(
+  log: (line: string) => void,
+  adtLog: AdtLogReader = createAdtLogReader(undefined),
+  adtTrace: AdtTraceReader = createAdtTraceReader(undefined),
+  adtComm: AdtCommReader = createAdtCommReader(undefined)
+): AdtBridge & vscode.Disposable {
   // uri -> time of the last diagnostics change / of our last save or activation.
   const lastDiagnosticsChange = new Map<string, number>();
   const lastOperation = new Map<string, number>();
   const diagnosticsListener = vscode.languages.onDidChangeDiagnostics((event) => {
     const now = Date.now();
-    for (const uri of event.uris) lastDiagnosticsChange.set(uri.toString(), now);
+    for (const uri of event.uris) {
+      if (uri.scheme === 'abap') lastDiagnosticsChange.set(uri.toString(), now);
+    }
   });
 
   async function ensureAdt(): Promise<void> {
@@ -60,11 +80,21 @@ export function createAdtBridge(log: (line: string) => void): AdtBridge & vscode
     await ensureAdt();
     const previous = vscode.window.activeTextEditor;
     const document = await vscode.workspace.openTextDocument(toUri(uri));
+    const targetUri = document.uri.toString();
+    const isActive = (): boolean => vscode.window.activeTextEditor?.document.uri.toString() === targetUri;
     await vscode.window.showTextDocument(document, { preview: true, preserveFocus: false });
     try {
+      if (!isActive()) {
+        // Something else (for example the mirror feature's own focus change) stole
+        // the active editor; try once more before giving up.
+        await vscode.window.showTextDocument(document, { preview: true, preserveFocus: false });
+      }
+      if (!isActive()) {
+        throw new ToolError(`Could not make ${uri} the active editor, so ${command} was not run.`);
+      }
       await vscode.commands.executeCommand(command);
     } finally {
-      if (previous && previous.document.uri.toString() !== document.uri.toString()) {
+      if (previous && previous.document.uri.toString() !== targetUri) {
         await vscode.window.showTextDocument(previous.document, { viewColumn: previous.viewColumn, preserveFocus: false });
       }
     }
@@ -77,6 +107,40 @@ export function createAdtBridge(log: (line: string) => void): AdtBridge & vscode
     if (previous && previous.document.uri.toString() !== document.uri.toString()) {
       await vscode.window.showTextDocument(previous.document, { viewColumn: previous.viewColumn });
     }
+  }
+
+  // Quote SAP's own error text when ADT logged one since `since`; otherwise
+  // fall back to our guess plus a pointer to VS Code's notifications.
+  async function failureWithSapReason(summary: string, since: number, fallbackDetail: string): Promise<ToolError> {
+    const reasons = await adtLog.errorsSince(since, SAP_REASON_WAIT_MS);
+    if (reasons.length > 0) return new ToolError(`${summary} SAP says: ${reasons.join(' | ')}`);
+    return new ToolError(`${summary} ${fallbackDetail}; ${CHECK_NOTIFICATIONS_HINT}.`);
+  }
+
+  // True when SAP confirmed the lock/unlock, false when ADT made no call we
+  // could see (for example the object was already in that state). Throws
+  // when SAP refused, quoting SAP's text when ADT's trace has it.
+  async function runLockCommand(uri: string, method: LockMethod, action: 'Lock' | 'Unlock'): Promise<boolean> {
+    const since = Date.now();
+    await runOnActiveEditor(uri, `adt-vscode.${method}`);
+    const destination = destinationOf(uri) ?? '';
+    const httpAction = action === 'Lock' ? 'LOCK' : 'UNLOCK';
+    const [status, reply] = await Promise.all([
+      adtComm.lockStatusSince(httpAction, destination, since, SAP_REASON_WAIT_MS),
+      adtTrace.lockReplySince(method, since, SAP_REASON_WAIT_MS),
+    ]);
+    if (reply?.errorMessage) throw new ToolError(`${action} failed. SAP says: ${reply.errorMessage}`);
+    if (reply?.lockingSupported === false) throw new ToolError(`${action} failed. SAP says this object does not support locking.`);
+    if (status !== undefined && status >= 400) {
+      const reasons = await adtLog.errorsSince(since, 0);
+      const detail = reasons.length > 0
+        ? ` SAP says: ${reasons.join(' | ')}`
+        : status === 403 && action === 'Lock'
+          ? ' This usually means another session (another VS Code window, SAP GUI or Eclipse) is editing the object, or a stale lock is left; close that session or remove the entry in SM12.'
+          : '';
+      throw new ToolError(`${action} failed: SAP answered HTTP ${status} to ${httpAction}.${detail}`);
+    }
+    return status !== undefined || reply?.operationExecuted === true;
   }
 
   function waitForDiagnostics(uri: string, since: number): Promise<void> {
@@ -156,13 +220,18 @@ export function createAdtBridge(log: (line: string) => void): AdtBridge & vscode
         throw new ToolError('This object has unsaved changes in VS Code. Save or revert them there first.');
       }
       if (sha256Hex(document.getText()) !== baseHash) throw new StaleSourceError();
-      lastOperation.set(document.uri.toString(), Date.now());
+      const startedAt = Date.now();
+      lastOperation.set(document.uri.toString(), startedAt);
 
       // writeFile on abap:// is a no-op for open documents, so edit + save.
       const edit = new vscode.WorkspaceEdit();
       edit.replace(document.uri, new vscode.Range(document.positionAt(0), document.positionAt(document.getText().length)), source);
       if (!(await vscode.workspace.applyEdit(edit))) {
-        throw new ToolError('VS Code rejected the edit. The object may be locked by another user or read-only.');
+        throw await failureWithSapReason(
+          'VS Code rejected the edit. Nothing was saved.',
+          startedAt,
+          'The object may be locked by another user or read-only'
+        );
       }
       let saved = false;
       try {
@@ -175,29 +244,48 @@ export function createAdtBridge(log: (line: string) => void): AdtBridge & vscode
         );
       } catch (error) {
         await revertDocument(document);
-        throw new ToolError(`Save failed: ${error instanceof Error ? error.message : String(error)}. Nothing was saved.`);
+        throw await failureWithSapReason(
+          `Save failed: ${error instanceof Error ? error.message : String(error)}. Nothing was saved.`,
+          startedAt,
+          'No further detail was available'
+        );
       }
       if (!saved) {
         await revertDocument(document);
-        throw new ToolError('Save was cancelled or failed in VS Code (for example no transport request). Nothing was saved.');
+        throw await failureWithSapReason(
+          'Save was cancelled or failed in VS Code. Nothing was saved.',
+          startedAt,
+          'Possible causes: a lock held by another user, or no transport request'
+        );
       }
       log(`saved ${uri}`);
       return { newHash: sha256Hex(document.getText()) };
     },
 
     async activate(uri: string): Promise<void> {
-      lastOperation.set(toUri(uri).toString(), Date.now());
+      const key = toUri(uri).toString();
+      // Check first so a syntax error surfaces as diagnostics instead of
+      // SAP's own interactive "activate anyway?" dialog. Only activate when
+      // the check comes back clean.
+      const beforeCheck = Date.now();
+      await runOnActiveEditor(uri, 'adt-vscode.checkObject');
+      lastOperation.set(key, beforeCheck);
+      await waitForDiagnostics(key, beforeCheck);
+      const hasCheckErrors = vscode.languages
+        .getDiagnostics(toUri(uri))
+        .some((d) => d.severity === vscode.DiagnosticSeverity.Error);
+      if (hasCheckErrors) return;
+      const beforeActivate = Date.now();
       await runOnActiveEditor(uri, 'adt-vscode.activate');
+      lastOperation.set(key, beforeActivate);
     },
 
     async lock(uri: string): Promise<'locked' | 'unknown'> {
-      await runOnActiveEditor(uri, 'adt-vscode.lockFile');
-      return 'unknown';
+      return (await runLockCommand(uri, 'lockFile', 'Lock')) ? 'locked' : 'unknown';
     },
 
     async unlock(uri: string): Promise<'unlocked' | 'unknown'> {
-      await runOnActiveEditor(uri, 'adt-vscode.unlockFile');
-      return 'unknown';
+      return (await runLockCommand(uri, 'unlockFile', 'Unlock')) ? 'unlocked' : 'unknown';
     },
 
     async diagnostics(uri: string): Promise<DiagnosticInfo[]> {
@@ -233,7 +321,12 @@ export function createAdtBridge(log: (line: string) => void): AdtBridge & vscode
       await vscode.env.clipboard.writeText(query);
       return new Promise<string | undefined>((resolve) => {
         const subscriptions: vscode.Disposable[] = [];
+        let done = false;
+        // Idempotent: a resolved pick and the toast's own dismissal can both
+        // try to finish this promise, only the first call matters.
         const finish = (value: string | undefined): void => {
+          if (done) return;
+          done = true;
           subscriptions.forEach((s) => s.dispose());
           resolve(value);
         };
@@ -251,9 +344,8 @@ export function createAdtBridge(log: (line: string) => void): AdtBridge & vscode
               'Pick it in the Open Object dialog (the name is on your clipboard).',
             'Cancel'
           )
-          .then((choice) => {
-            if (choice === 'Cancel') finish(undefined);
-          });
+          // Cancel or dismissal (choice undefined) both mean no pick happened.
+          .then(() => finish(undefined));
         void vscode.commands.executeCommand('adt-vscode.openAbapObject').then(undefined, (error: unknown) => {
           log(`openAbapObject failed: ${error instanceof Error ? error.message : String(error)}`);
           finish(undefined);

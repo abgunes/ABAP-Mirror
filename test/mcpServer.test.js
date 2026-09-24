@@ -110,6 +110,7 @@ test('initialize reports abap-mirror, tools/list returns all tools with schemas'
     const tools = list.json.result.tools;
     assert.deepEqual(tools.map((t) => t.name).sort(), [
       'abap_activate',
+      'abap_edit_source',
       'abap_list_folder',
       'abap_list_systems',
       'abap_lock',
@@ -127,6 +128,9 @@ test('initialize reports abap-mirror, tools/list returns all tools with schemas'
     const write = tools.find((t) => t.name === 'abap_write_source');
     assert.deepEqual(write.inputSchema.required.sort(), ['baseHash', 'source', 'uri']);
     assert.equal(write.annotations.destructiveHint, true);
+    const edit = tools.find((t) => t.name === 'abap_edit_source');
+    assert.deepEqual(edit.inputSchema.required.sort(), ['baseHash', 'edits', 'uri']);
+    assert.equal(edit.annotations.destructiveHint, true);
   });
 });
 

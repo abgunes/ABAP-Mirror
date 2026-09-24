@@ -2,7 +2,7 @@ import { listFolderTool, listSystemsTool } from './browseTools';
 import { readObjectTool, whereUsedTool } from './readTools';
 import { refreshIndexTool, searchObjectsTool } from './searchTools';
 import { AnyToolDefinition, ToolDefinition, ToolDeps } from './toolDefinition';
-import { activateTool, lockTool, unlockTool, writeSourceTool } from './writeTools';
+import { activateTool, editSourceTool, lockTool, unlockTool, writeSourceTool } from './writeTools';
 import { ToolError } from '../types';
 
 // Adding a tool = one entry here; server.ts registers whatever this list holds.
@@ -13,6 +13,7 @@ export const ALL_TOOLS: AnyToolDefinition[] = [
   refreshIndexTool,
   readObjectTool,
   writeSourceTool,
+  editSourceTool,
   activateTool,
   lockTool,
   unlockTool,

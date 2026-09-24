@@ -4,7 +4,16 @@ const { z } = require('zod');
 const { writeSourceTool, activateTool, lockTool, unlockTool } = require('../out/mcp/tools/writeTools');
 const { sha256Hex } = require('../out/mcp/hash');
 const { StaleSourceError } = require('../out/mcp/types');
-const { createDeps, createFakeBridge, CLASS_FOLDER, CLASS_MAIN, CLASS_MAIN_URI } = require('./helpers/mcpFakes');
+const {
+  createDeps,
+  createFakeBridge,
+  buildTree,
+  defaultTreeSpec,
+  ROOT,
+  CLASS_FOLDER,
+  CLASS_MAIN,
+  CLASS_MAIN_URI,
+} = require('./helpers/mcpFakes');
 
 function call(tool, rawArgs, deps) {
   return tool.handler(z.object(tool.inputSchema).parse(rawArgs), deps);
@@ -57,6 +66,31 @@ test('abap_write_source with unchanged source does not save or ask', async () =>
   const out = await call(writeSourceTool, { uri: CLASS_MAIN_URI, source: CLASS_MAIN, baseHash: BASE }, deps);
   assert.equal(out.saved, false);
   assert.equal(confirmRequests.length, 0);
+  assert.equal(deps.bridge.calls.writes.length, 0);
+});
+
+test('abap_write_source with unchanged source and activate confirms activate with no diff', async () => {
+  const { deps, confirmRequests } = createDeps();
+  const out = await call(writeSourceTool, { uri: CLASS_MAIN_URI, source: CLASS_MAIN, baseHash: BASE, activate: true }, deps);
+  assert.equal(confirmRequests.length, 1);
+  assert.equal(confirmRequests[0].action, 'activate');
+  assert.equal(confirmRequests[0].currentSource, undefined);
+  assert.equal(confirmRequests[0].proposedSource, undefined);
+  assert.equal(out.saved, false);
+  assert.deepEqual(deps.bridge.calls.writes, []);
+  assert.deepEqual(deps.bridge.calls.activations, [CLASS_MAIN_URI]);
+  assert.equal(out.activated, true);
+});
+
+test('a confirmation that never answers times out and is treated as a denial', async () => {
+  const { deps } = createDeps({
+    confirmer: { confirm: () => new Promise(() => {}) },
+    timeouts: { interactive: 20 },
+  });
+  await assert.rejects(
+    call(writeSourceTool, { uri: CLASS_MAIN_URI, source: NEW_SOURCE, baseHash: BASE }, deps),
+    /No answer in VS Code within \d+ s for saving ZCL_DEMO_JOB \(main\); treated as denied\./
+  );
   assert.equal(deps.bridge.calls.writes.length, 0);
 });
 
@@ -114,6 +148,28 @@ test('abap_activate records a per-object failure and continues', async () => {
   assert.equal(out.results[0].activated, false);
   assert.equal(out.results[0].error, 'locked by OTHER_USER');
   assert.equal(out.results[1].activated, true);
+});
+
+test('abap_activate confirms with every unique destination when objects span systems', async () => {
+  const otherRoot = 'abap:/repotree-v1/QAS_SYS';
+  const tree1 = buildTree(defaultTreeSpec(), ROOT);
+  const tree2 = buildTree(defaultTreeSpec(), otherRoot);
+  const mergedTree = {
+    folders: new Map([...tree1.folders, ...tree2.folders]),
+    files: new Map([...tree1.files, ...tree2.files]),
+  };
+  const bridge = createFakeBridge({
+    tree: mergedTree,
+    systems: [
+      { destination: 'DEV_SYS', rootUri: ROOT },
+      { destination: 'QAS_SYS', rootUri: otherRoot },
+    ],
+  });
+  const { deps, confirmRequests } = createDeps({ bridge });
+  const otherFolder = CLASS_FOLDER.replace(ROOT, otherRoot);
+  await call(activateTool, { uris: [CLASS_FOLDER, otherFolder] }, deps);
+  assert.equal(confirmRequests.length, 1);
+  assert.equal(confirmRequests[0].destination, 'DEV_SYS, QAS_SYS');
 });
 
 test('abap_lock and abap_unlock confirm, run on the main source, and report status', async () => {

@@ -46,7 +46,7 @@ test('abap_refresh_index crawls and then search finds objects from the index', a
 
 test('abap_refresh_index refuses an unknown destination and lists the connected ones', async () => {
   const { deps } = createDeps();
-  await assert.rejects(call(refreshIndexTool, { destination: 'PRD' }, deps), /"PRD" is not connected.*DEV_SYS/);
+  await assert.rejects(call(refreshIndexTool, { destination: 'QAS_SYS' }, deps), /"QAS_SYS" is not connected.*DEV_SYS/);
 });
 
 test('abap_refresh_index refuses to run with no prefixes and no packages', async () => {
@@ -84,7 +84,7 @@ test('interactive search needs a destination when several systems are connected'
   const bridge = createFakeBridge();
   bridge.systems = [
     { destination: 'DEV_SYS', rootUri: ROOT },
-    { destination: 'QA_SYS', rootUri: 'abap:/repotree-v1/QA_SYS' },
+    { destination: 'QAS_SYS', rootUri: 'abap:/repotree-v1/QAS_SYS' },
   ];
   const { deps } = createDeps({ bridge });
   await assert.rejects(call(searchObjectsTool, { query: 'X' }, deps), /Pass destination/);

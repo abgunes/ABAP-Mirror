@@ -2,7 +2,7 @@
   "name": "abap-mirror",
   "displayName": "ABAP Mirror",
   "description": "Mirrors SAP ADT (abap://) documents to real files so AI coding assistants like Claude Code can read and edit them, with every change staying under your review.",
-  "version": "0.2.0",
+  "version": "0.2.5",
   "publisher": "abgunes",
   "license": "MIT",
   "scripts": {
@@ -91,6 +91,7 @@
         "abapMirror.mcp.enabled": {
           "type": "boolean",
           "default": false,
+          "scope": "application",
           "markdownDescription": "Run the local `abap-mirror` MCP server so external AI tools (Cursor, Copilot, Cline, Claude Code, ...) can list, search, read, write, activate, lock and unlock ABAP objects through the SAP ADT connection open in VS Code. Listens on 127.0.0.1 only and needs a token; use **ABAP Mirror - Copy MCP Client Config** to connect a client."
         },
         "abapMirror.mcp.port": {
@@ -98,11 +99,13 @@
           "default": 2240,
           "minimum": 1024,
           "maximum": 65535,
+          "scope": "application",
           "description": "Local port for the abap-mirror MCP server (127.0.0.1 only)."
         },
         "abapMirror.mcp.confirmWrites": {
           "type": "boolean",
           "default": true,
+          "scope": "application",
           "description": "Ask in VS Code before an MCP client saves, activates, locks or unlocks an ABAP object. Saving through MCP writes to the SAP system, so only turn this off if you trust the client completely."
         },
         "abapMirror.mcp.indexedPackagePrefixes": {
@@ -242,5 +245,8 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",
     "zod": "^4.6.5"
+  },
+  "overrides": {
+    "@hono/node-server": "^1.19.9"
   }
 }

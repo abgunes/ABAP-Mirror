@@ -51,7 +51,7 @@ function defaultTreeSpec() {
           Classes: { CL_SAP_THING: { 'cl_sap_thing.clas.abap': 'CLASS cl_sap_thing DEFINITION.' } },
         },
       },
-      YTOOLS: {
+      YDEMO: {
         'Source Code Library': {
           Interfaces: { ZIF_DEMO: { 'zif_demo.intf.abap': 'INTERFACE zif_demo PUBLIC.\nENDINTERFACE.' } },
         },
@@ -87,7 +87,7 @@ function buildTree(spec, rootUri = ROOT) {
 }
 
 function createFakeBridge(options = {}) {
-  const tree = buildTree(options.spec ?? defaultTreeSpec());
+  const tree = options.tree ?? buildTree(options.spec ?? defaultTreeSpec());
   const calls = { writes: [], activations: [], locks: [], unlocks: [], references: [], picks: [], readDirectory: [] };
   const bridge = {
     tree,
@@ -161,7 +161,7 @@ function createDeps(overrides = {}) {
   const logs = [];
   const deps = {
     bridge: overrides.bridge ?? createFakeBridge(),
-    confirmer: {
+    confirmer: overrides.confirmer ?? {
       async confirm(request) {
         confirmRequests.push(request);
         return overrides.confirmAnswer ?? true;
