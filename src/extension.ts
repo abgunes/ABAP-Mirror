@@ -17,6 +17,7 @@ import { detectAbapObjectType } from './abapObjectType';
 import { openTypeIconSettingsPanel } from './typeIconSettingsPanel';
 import { safeSegment } from './mirrorPath';
 import { createMirrorWriteScheduler } from './mirrorWriteScheduler';
+import { registerMcp } from './mcp/lifecycle';
 
 const MIRROR_ROOT = path.join(os.homedir(), '.abap-mirror');
 const mirrorToAbapUri = new Map<string, string>();
@@ -526,6 +527,14 @@ export function activate(context: vscode.ExtensionContext): void {
 
   if (vscode.window.activeTextEditor) {
     handleActiveEditorChange(vscode.window.activeTextEditor);
+  }
+
+  // The MCP server is an independent, opt-in feature; a failure there must
+  // never take the mirror down with it.
+  try {
+    registerMcp(context);
+  } catch (error) {
+    console.error('ABAP Mirror: MCP server setup failed', error);
   }
 }
 

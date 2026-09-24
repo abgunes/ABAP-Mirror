@@ -76,6 +76,10 @@ example it was deleted from the package, or VS Code rejects the edit outright), 
 a **Try Again** button instead of the edit silently vanishing. The affected object also shows an orange "!" badge
 in the ABAP Mirror Files panel until the retry succeeds.
 
+The optional MCP server (below) is the one exception, and it is off by default. When you turn it on, an MCP client
+can ask VS Code to save and activate an object on SAP. Each such request pops up a confirmation in VS Code
+first (with a diff of the change), unless you switch `abapMirror.mcp.confirmWrites` off.
+
 ## Getting started
 
 1. Install [ABAP Mirror](https://marketplace.visualstudio.com/items?itemName=abgunes.abap-mirror)
@@ -94,6 +98,9 @@ in the ABAP Mirror Files panel until the retry succeeds.
 | **ABAP Mirror - Retry Failed Syncs** | Lists every mirror that failed to sync back to ADT and lets you retry all of them, or a chosen few, in one go. Available from the Command Palette or the panel's title-bar sync icon. |
 | **ABAP Mirror - Retry Sync** | Retries syncing a single object back to ADT. Shows up as a hover icon and right-click entry in the ABAP Mirror Files panel, only on an object that isn't fully synced. |
 | **ABAP Mirror - Retry Sync for Folder** | Retries syncing every unsynced object under a folder back to ADT. Shows up as a hover icon and right-click entry in the ABAP Mirror Files panel, only on a folder containing something unsynced. |
+| **ABAP Mirror - Copy MCP Client Config** | Copies a ready-to-paste MCP client configuration (with the token) for Cursor/Cline-style JSON, the Claude Code CLI, or VS Code `mcp.json`. |
+| **ABAP Mirror - Regenerate MCP Token** | Creates a new MCP token; clients using the old one stop working until you copy the config again. |
+| **ABAP Mirror - Rebuild MCP Object Index** | Crawls a connected system's prefix packages so MCP clients can search objects by name. Cancellable. |
 
 <br/>
 
@@ -105,12 +112,54 @@ in the ABAP Mirror Files panel until the retry succeeds.
 
 The ABAP Mirror Files panel's title bar carries two icons, shown above: **1** is the gear, **ABAP Mirror - Configure Type Icons**. **2** is the sync icon, **ABAP Mirror - Retry Failed Syncs**.
 
+## MCP server for other AI tools
+
+ABAP Mirror can also run a small local [MCP](https://modelcontextprotocol.io) server named `abap-mirror`. It
+lets any MCP client (Cursor, GitHub Copilot, Cline, Claude Code, ...) work with ABAP objects on the systems you
+are connected to through SAP ADT in VS Code. It uses ADT's existing connection and login; abap-mirror stores no
+SAP credentials of its own. It is independent of the mirror files.
+
+**Turn it on:** set `abapMirror.mcp.enabled` to `true`. A `abap-mirror MCP :2240` item appears in the status bar.
+**Connect a client:** run **ABAP Mirror - Copy MCP Client Config** (or click the status bar item), pick your
+client's format, and paste it into that client's MCP configuration. The snippet contains a secret token, so treat
+it like a password.
+
+| Tool | What it does |
+|---|---|
+| `abap_list_systems` | Lists the SAP systems connected in VS Code. |
+| `abap_list_folder` | Lists a package or folder in the ADT repository tree. |
+| `abap_search_objects` | Finds objects by name (wildcards allowed), from a local index or through ADT's Open Object dialog. |
+| `abap_refresh_index` | Rebuilds the local name index for a system (all prefix packages, or given packages). |
+| `abap_read_object` | Reads an object's source, every part (for classes: definitions, implementations, test classes, ...). |
+| `abap_where_used` | Lists where an object is used. |
+| `abap_write_source` | Saves new source for one part, optionally activating it. Rejects the write if the source changed since it was read. |
+| `abap_activate` | Activates up to 20 objects. |
+| `abap_lock` / `abap_unlock` | Locks or unlocks an object for editing. |
+
+Good to know:
+
+- VS Code must be running with the ADT connection open; the server only listens on `127.0.0.1` and every request
+  needs the token. **ABAP Mirror - Regenerate MCP Token** invalidates the old token.
+- Saving, activating, locking and unlocking run one at a time and briefly show the object in an editor tab,
+  because ADT performs these on the active editor. If SAP asks for a transport request, pick it in VS Code.
+- An object with unsaved changes in VS Code is never overwritten: save or revert it first.
+- Name search uses an index of the packages matching `abapMirror.mcp.indexedPackagePrefixes` (default `Z`, `Y`).
+  Build it with **ABAP Mirror - Rebuild MCP Object Index**. Anything else is found through ADT's Open Object
+  dialog, which asks you to pick the object in VS Code.
+- The index (object names and repository paths only, no source code) is stored in VS Code's global storage for
+  this extension.
+- Lock and unlock report `unknown` status, because ADT does not expose whether the lock was granted.
+
 ## Settings
 
 | Setting | Default | Description |
 |---|---|---|
 | `abapMirror.enabled` | `true` | Turn mirroring on or off. Takes effect immediately, no reload needed. When off, no mirror files are created/updated and nothing is synced back into `abap://` documents; existing mirror files are left untouched. |
 | `abapMirror.icons.enableInMirrorPanel` | `true` | Show a colored icon for each object's ABAP type in the ABAP Mirror Files panel. Turn off to fall back to plain file icons. |
+| `abapMirror.mcp.enabled` | `false` | Run the local `abap-mirror` MCP server for other AI tools. See "MCP server for other AI tools". |
+| `abapMirror.mcp.port` | `2240` | Port on `127.0.0.1` for the MCP server. |
+| `abapMirror.mcp.confirmWrites` | `true` | Ask in VS Code before an MCP client saves, activates, locks or unlocks an object. |
+| `abapMirror.mcp.indexedPackagePrefixes` | `["Z", "Y"]` | Package prefixes crawled when the MCP object index is rebuilt. |
 
 ## Where mirror files live
 
@@ -141,6 +190,14 @@ Mirror files live under `~/.abap-mirror/`, in your home directory and outside an
 - If syncing a change back fails, retrying (via the error notification's **Try Again** button) re-sends the mirror's current on-disk content; it does not re-check whether the ADT document itself changed in the meantime.
 
 ## Release notes
+
+### 0.2.0
+
+- New optional **MCP server** (`abap-mirror`): lets MCP clients such as Cursor, GitHub Copilot, Cline and Claude
+  Code list, search, read, find where-used, write, activate, lock and unlock ABAP objects through your SAP ADT
+  connection in VS Code. Off by default; enable it with `abapMirror.mcp.enabled`.
+- Every save, activation, lock and unlock from an MCP client asks for confirmation in VS Code, with a diff.
+- Requires VS Code 1.82 or newer.
 
 ### 0.1.1
 
