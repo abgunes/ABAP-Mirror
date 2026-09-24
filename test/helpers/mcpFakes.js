@@ -88,7 +88,7 @@ function buildTree(spec, rootUri = ROOT) {
 
 function createFakeBridge(options = {}) {
   const tree = options.tree ?? buildTree(options.spec ?? defaultTreeSpec());
-  const calls = { writes: [], activations: [], locks: [], unlocks: [], references: [], picks: [], readDirectory: [] };
+  const calls = { writes: [], checks: [], activations: [], locks: [], unlocks: [], references: [], picks: [], readDirectory: [] };
   const bridge = {
     tree,
     calls,
@@ -114,6 +114,10 @@ function createFakeBridge(options = {}) {
       calls.writes.push({ uri, source });
       tree.files.set(uri, source);
       return { newHash: sha256Hex(source) };
+    },
+    async check(uri) {
+      calls.checks.push(uri);
+      return bridge.diagnosticsByUri.get(uri) ?? [];
     },
     async activate(uri) {
       calls.activations.push(uri);
@@ -174,7 +178,17 @@ function createDeps(overrides = {}) {
       confirmWrites: () => overrides.confirmWrites ?? true,
       indexedPackagePrefixes: () => overrides.prefixes ?? ['Z', 'Y'],
     },
-    timeouts: { read: 500, list: 500, whereUsed: 500, write: 500, activate: 500, lock: 500, interactive: 200, ...overrides.timeouts },
+    timeouts: {
+      read: 500,
+      list: 500,
+      whereUsed: 500,
+      write: 500,
+      check: 500,
+      activate: 500,
+      lock: 500,
+      interactive: 200,
+      ...overrides.timeouts,
+    },
     isStopping: () => false,
     log: (line) => logs.push(line),
   };

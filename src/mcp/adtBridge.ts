@@ -160,6 +160,24 @@ export function createAdtBridge(
     });
   }
 
+  function mapDiagnostics(uri: string): DiagnosticInfo[] {
+    return vscode.languages.getDiagnostics(toUri(uri)).map((d) => ({
+      severity: SEVERITY[d.severity] ?? 'info',
+      line: d.range.start.line + 1,
+      message: d.message,
+    }));
+  }
+
+  // Runs ADT's syntax check and waits for its diagnostics, without activating.
+  async function runCheck(uri: string): Promise<DiagnosticInfo[]> {
+    const key = toUri(uri).toString();
+    const before = Date.now();
+    await runOnActiveEditor(uri, 'adt-vscode.checkObject');
+    lastOperation.set(key, before);
+    await waitForDiagnostics(key, before);
+    return mapDiagnostics(uri);
+  }
+
   async function snippetsFor(locations: vscode.Location[]): Promise<Map<string, string[]>> {
     const files = [...new Set(locations.map((l) => l.uri.toString()))].slice(0, MAX_SNIPPET_FILES);
     const lines = new Map<string, string[]>();
@@ -262,19 +280,17 @@ export function createAdtBridge(
       return { newHash: sha256Hex(document.getText()) };
     },
 
+    async check(uri: string): Promise<DiagnosticInfo[]> {
+      return runCheck(uri);
+    },
+
     async activate(uri: string): Promise<void> {
       const key = toUri(uri).toString();
       // Check first so a syntax error surfaces as diagnostics instead of
       // SAP's own interactive "activate anyway?" dialog. Only activate when
       // the check comes back clean.
-      const beforeCheck = Date.now();
-      await runOnActiveEditor(uri, 'adt-vscode.checkObject');
-      lastOperation.set(key, beforeCheck);
-      await waitForDiagnostics(key, beforeCheck);
-      const hasCheckErrors = vscode.languages
-        .getDiagnostics(toUri(uri))
-        .some((d) => d.severity === vscode.DiagnosticSeverity.Error);
-      if (hasCheckErrors) return;
+      const checkDiagnostics = await runCheck(uri);
+      if (checkDiagnostics.some((d) => d.severity === 'error')) return;
       const beforeActivate = Date.now();
       await runOnActiveEditor(uri, 'adt-vscode.activate');
       lastOperation.set(key, beforeActivate);
@@ -292,11 +308,7 @@ export function createAdtBridge(
       const key = toUri(uri).toString();
       const since = lastOperation.get(key);
       if (since !== undefined) await waitForDiagnostics(key, since);
-      return vscode.languages.getDiagnostics(toUri(uri)).map((d) => ({
-        severity: SEVERITY[d.severity] ?? 'info',
-        line: d.range.start.line + 1,
-        message: d.message,
-      }));
+      return mapDiagnostics(uri);
     },
 
     async references(uri: string, line: number, character: number): Promise<ReferenceLocation[]> {

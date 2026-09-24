@@ -1,5 +1,5 @@
 import { listFolderTool, listSystemsTool } from './browseTools';
-import { readObjectTool, whereUsedTool } from './readTools';
+import { checkTool, readObjectTool, whereUsedTool } from './readTools';
 import { refreshIndexTool, searchObjectsTool } from './searchTools';
 import { AnyToolDefinition, ToolDefinition, ToolDeps } from './toolDefinition';
 import { activateTool, editSourceTool, lockTool, unlockTool, writeSourceTool } from './writeTools';
@@ -12,6 +12,7 @@ export const ALL_TOOLS: AnyToolDefinition[] = [
   listFolderTool,
   refreshIndexTool,
   readObjectTool,
+  checkTool,
   writeSourceTool,
   editSourceTool,
   activateTool,

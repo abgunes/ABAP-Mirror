@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const { z } = require('zod');
 const { listSystemsTool, listFolderTool } = require('../out/mcp/tools/browseTools');
 const { searchObjectsTool, refreshIndexTool } = require('../out/mcp/tools/searchTools');
-const { readObjectTool, whereUsedTool } = require('../out/mcp/tools/readTools');
+const { checkTool, readObjectTool, whereUsedTool } = require('../out/mcp/tools/readTools');
 const { sha256Hex } = require('../out/mcp/hash');
 const { createDeps, createFakeBridge, createMemoryIndexStore, ROOT, CLASS_FOLDER, CLASS_MAIN, CLASS_MAIN_URI, uriOf } = require('./helpers/mcpFakes');
 
@@ -129,6 +129,22 @@ test('abap_read_object explains how to find an object that is not indexed', asyn
   const { deps } = createDeps();
   await assert.rejects(call(readObjectTool, { destination: 'DEV_SYS', name: 'ZNOPE' }, deps), /abap_search_objects/);
   await assert.rejects(call(readObjectTool, {}, deps), /Pass either uri, or destination and name/);
+});
+
+test('abap_check runs the check on the main source and returns its diagnostics', async () => {
+  const bridge = createFakeBridge();
+  bridge.diagnosticsByUri.set(CLASS_MAIN_URI, [{ severity: 'error', line: 3, message: 'Field ... is unknown' }]);
+  const { deps } = createDeps({ bridge });
+  const out = await call(checkTool, { uri: CLASS_FOLDER }, deps);
+  assert.deepEqual(bridge.calls.checks, [CLASS_MAIN_URI]);
+  assert.deepEqual(out.diagnostics, [{ severity: 'error', line: 3, message: 'Field ... is unknown' }]);
+});
+
+test('abap_check returns no diagnostics for a clean object and needs no confirmation', async () => {
+  const confirmer = { async confirm() { throw new Error('abap_check must not ask for confirmation'); } };
+  const { deps } = createDeps({ confirmer });
+  const out = await call(checkTool, { uri: CLASS_MAIN_URI }, deps);
+  assert.deepEqual(out.diagnostics, []);
 });
 
 test('abap_where_used asks references at the declaration and indexes the users', async () => {

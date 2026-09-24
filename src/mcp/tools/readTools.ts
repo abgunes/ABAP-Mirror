@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { classifyFile, destinationOf, lastSegment, parentUri } from '../abapUri';
 import { sha256Hex } from '../hash';
 import { findIdentifierPosition } from '../identifierPosition';
-import { abapUriSchema, sourcePartSchema } from '../schemas';
+import { abapUriSchema, diagnosticSchema, sourcePartSchema } from '../schemas';
 import { withTimeout } from '../taskQueue';
 import { IndexEntry, NotFoundError, ToolError } from '../types';
 import { mainSourceOf, readSource, requireSystems, resolveObject, ResolvedObject } from './common';
@@ -79,6 +79,30 @@ export const readObjectTool = defineTool({
       objectUri: object.folderUri,
       parts,
     };
+  },
+});
+
+export const checkTool = defineTool({
+  name: 'abap_check',
+  title: 'Check an ABAP object for syntax errors',
+  description:
+    "Runs SAP's syntax check (ADT's \"Check Object\") on an object and returns its diagnostics, without activating " +
+    'it or needing confirmation. Briefly shows the object in an editor tab, because ADT performs the check on the ' +
+    'active editor.',
+  inputSchema: {
+    uri: abapUriSchema.describe('Object folder URI or any of its source files.'),
+  },
+  outputSchema: {
+    diagnostics: z.array(diagnosticSchema),
+  },
+  annotations: { readOnlyHint: true, openWorldHint: false },
+  async handler(args, deps) {
+    const object = await resolveObject(deps, args.uri);
+    const main = mainSourceOf(object);
+    return deps.uiQueue.run(async () => {
+      const diagnostics = await withTimeout(deps.bridge.check(main.uri), deps.timeouts.check, 'Check');
+      return { diagnostics };
+    });
   },
 });
 

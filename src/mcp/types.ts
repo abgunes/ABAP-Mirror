@@ -40,6 +40,8 @@ export interface AdtBridge {
   readFile(uri: string): Promise<string>;
   /** Replaces the whole document and saves it. Throws StaleSourceError if the open document no longer matches baseHash. */
   writeSource(uri: string, source: string, baseHash: string): Promise<{ newHash: string }>;
+  /** Runs SAP's syntax check without activating; returns its diagnostics. */
+  check(uri: string): Promise<DiagnosticInfo[]>;
   activate(uri: string): Promise<void>;
   lock(uri: string): Promise<'locked' | 'unknown'>;
   unlock(uri: string): Promise<'unlocked' | 'unknown'>;

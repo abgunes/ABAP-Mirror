@@ -110,6 +110,7 @@ test('initialize reports abap-mirror, tools/list returns all tools with schemas'
     const tools = list.json.result.tools;
     assert.deepEqual(tools.map((t) => t.name).sort(), [
       'abap_activate',
+      'abap_check',
       'abap_edit_source',
       'abap_list_folder',
       'abap_list_systems',

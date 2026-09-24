@@ -8,6 +8,7 @@ export interface Timeouts {
   list: number;
   whereUsed: number;
   write: number;
+  check: number;
   activate: number;
   lock: number;
   interactive: number;
@@ -18,6 +19,7 @@ export const DEFAULT_TIMEOUTS: Timeouts = {
   list: 30_000,
   whereUsed: 120_000,
   write: 180_000,
+  check: 60_000,
   activate: 120_000,
   lock: 60_000,
   interactive: 180_000,
